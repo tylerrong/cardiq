@@ -257,21 +257,23 @@ struct CollectionView: View {
 struct CollectionGridCell: View {
     let item: CollectionItem
 
+    private var gradeBadgeText: String? {
+        if let grade = item.officialGrade, let company = item.officialGradingCompany {
+            return "\(company) \(Int(grade))"
+        }
+        if let grade = item.gradingReport?.estimatedGrade {
+            return String(format: "%.1f", grade)
+        }
+        return nil
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: CIQSpacing.xs) {
-            RoundedRectangle(cornerRadius: CIQRadius.sm)
-                .fill(CIQColors.Fallback.backgroundTertiary)
-                .aspectRatio(0.714, contentMode: .fit)
-                .overlay {
-                    VStack(spacing: CIQSpacing.xxs) {
-                        if let grade = item.officialGrade {
-                            CIQBadge(text: "PSA \(Int(grade))", color: CIQColors.Fallback.accentPrimary)
-                        }
-                        Image(systemName: "photo")
-                            .font(.system(size: 28))
-                            .foregroundStyle(CIQColors.Fallback.textTertiary)
-                    }
-                }
+            CardArtworkView(
+                card: item.cardIdentity,
+                gradeBadge: gradeBadgeText,
+                size: .hero
+            )
 
             Text(item.cardIdentity?.name ?? "Unknown")
                 .font(CIQFont.footnoteBold)
@@ -284,15 +286,10 @@ struct CollectionGridCell: View {
                     .foregroundStyle(CIQColors.Fallback.textPrimary)
                 Spacer()
                 if item.purchasePrice != nil {
-                    Text(item.gainLoss.signedCurrencyFormatted)
-                        .font(CIQFont.captionBold)
-                        .foregroundStyle(item.gainLoss >= 0 ? CIQColors.Fallback.positive : CIQColors.Fallback.negative)
+                    PriceChangeLabel(percentageChange: item.gainLossPercentage)
                 }
             }
         }
-        .padding(CIQSpacing.xs)
-        .background(CIQColors.Fallback.backgroundCard)
-        .clipShape(RoundedRectangle(cornerRadius: CIQRadius.card))
     }
 }
 
@@ -301,28 +298,24 @@ struct CollectionListRow: View {
 
     var body: some View {
         HStack(spacing: CIQSpacing.sm) {
-            RoundedRectangle(cornerRadius: CIQRadius.xs)
-                .fill(CIQColors.Fallback.backgroundTertiary)
-                .frame(width: 44, height: 60)
-                .overlay {
-                    if let grade = item.officialGrade {
-                        Text("\(Int(grade))")
-                            .font(CIQFont.captionBold)
-                            .foregroundStyle(CIQColors.Fallback.accentPrimary)
-                    } else {
-                        Image(systemName: "photo")
-                            .font(CIQFont.caption)
-                            .foregroundStyle(CIQColors.Fallback.textTertiary)
-                    }
-                }
+            CardArtworkView(card: item.cardIdentity, size: .small)
 
             VStack(alignment: .leading, spacing: CIQSpacing.xxxs) {
                 Text(item.cardIdentity?.name ?? "Unknown")
                     .font(CIQFont.bodyBold)
                     .foregroundStyle(CIQColors.Fallback.textPrimary)
-                Text(item.cardIdentity?.setName ?? "")
-                    .font(CIQFont.caption)
-                    .foregroundStyle(CIQColors.Fallback.textSecondary)
+                HStack(spacing: CIQSpacing.xs) {
+                    Text(item.cardIdentity?.setName ?? "")
+                        .font(CIQFont.caption)
+                        .foregroundStyle(CIQColors.Fallback.textSecondary)
+                    if let grade = item.officialGrade, let co = item.officialGradingCompany {
+                        GradeBadge(grade: "\(co) \(Int(grade))")
+                    } else {
+                        Text("Raw")
+                            .font(CIQFont.captionBold)
+                            .foregroundStyle(CIQColors.Fallback.textTertiary)
+                    }
+                }
             }
 
             Spacer()
@@ -401,16 +394,13 @@ struct CollectionItemDetailView: View {
     private var cardHeader: some View {
         CIQCard {
             VStack(spacing: CIQSpacing.md) {
-                RoundedRectangle(cornerRadius: CIQRadius.sm)
-                    .fill(CIQColors.Fallback.backgroundTertiary)
-                    .frame(height: 200)
-                    .overlay {
-                        VStack {
-                            Image(systemName: "photo")
-                                .font(.system(size: 40))
-                                .foregroundStyle(CIQColors.Fallback.textTertiary)
-                        }
-                    }
+                CardArtworkView(
+                    card: item.cardIdentity,
+                    gradeBadge: item.officialGrade.map { "\(item.officialGradingCompany ?? "PSA") \(Int($0))" },
+                    size: .hero
+                )
+                .frame(maxWidth: 200)
+                .frame(maxWidth: .infinity)
 
                 if let card = item.cardIdentity {
                     VStack(spacing: CIQSpacing.xs) {

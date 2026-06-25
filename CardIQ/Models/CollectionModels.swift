@@ -132,7 +132,7 @@ enum CollectionFilterOption: String, CaseIterable, Sendable {
         case .graded: "Graded"
         case .pokemon: "Pokémon"
         case .gainers: "Gainers"
-        case .losers: "Losers"
+        case .losers: "Decliners"
         }
     }
 }

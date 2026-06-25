@@ -54,7 +54,7 @@ struct MarketView: View {
             HStack(spacing: CIQSpacing.xs) {
                 Image(systemName: "sparkles")
                     .font(.system(size: 16, weight: .semibold))
-                Text("Ask AI")
+                Text("Ask CardIQ")
                     .font(CIQFont.headline)
             }
             .foregroundStyle(.black)
@@ -66,7 +66,7 @@ struct MarketView: View {
         }
         .padding(.trailing, CIQSpacing.md)
         .padding(.bottom, CIQSpacing.md)
-        .accessibilityLabel("Ask AI about the market")
+        .accessibilityLabel("Ask CardIQ about the market")
     }
 
     private var watchlistSection: some View {
@@ -102,7 +102,7 @@ struct MarketView: View {
 
     private var allCardsSection: some View {
         VStack(alignment: .leading, spacing: CIQSpacing.sm) {
-            CIQSectionHeader("All Cards")
+            CIQSectionHeader("Browse Cards")
             ForEach(filteredCards) { card in
                 NavigationLink(value: card) {
                     MarketCardRow(card: card)
@@ -118,21 +118,7 @@ struct TrendingCardCell: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: CIQSpacing.xs) {
-            RoundedRectangle(cornerRadius: CIQRadius.sm)
-                .fill(CIQColors.Fallback.backgroundTertiary)
-                .frame(width: 140, height: 100)
-                .overlay {
-                    VStack(spacing: CIQSpacing.xxs) {
-                        Image(systemName: "chart.line.uptrend.xyaxis")
-                            .font(.system(size: 24))
-                            .foregroundStyle(CIQColors.Fallback.accentPrimary)
-                        if let market {
-                            Text(market.rawEstimatedValue.currencyFormatted)
-                                .font(CIQFont.bodyBold)
-                                .foregroundStyle(CIQColors.Fallback.textPrimary)
-                        }
-                    }
-                }
+            CardArtworkView(card: card, size: .large)
 
             Text(card.name)
                 .font(CIQFont.footnoteBold)
@@ -140,12 +126,18 @@ struct TrendingCardCell: View {
                 .lineLimit(1)
 
             if let market {
-                Text(market.thirtyDayChangePercentage >= 0 ? "+\(market.thirtyDayChangePercentage.percentFormatted)" : market.thirtyDayChangePercentage.percentFormatted)
-                    .font(CIQFont.captionBold)
-                    .foregroundStyle(market.thirtyDayChangePercentage >= 0 ? CIQColors.Fallback.positive : CIQColors.Fallback.negative)
+                HStack(spacing: CIQSpacing.xs) {
+                    Text(market.rawEstimatedValue.currencyFormatted)
+                        .font(CIQFont.bodyBold)
+                        .foregroundStyle(CIQColors.Fallback.textPrimary)
+                    PriceChangeLabel(percentageChange: market.thirtyDayChangePercentage)
+                }
+                Text("\(market.salesVolume30Days) sales")
+                    .font(CIQFont.caption)
+                    .foregroundStyle(CIQColors.Fallback.textTertiary)
             }
         }
-        .frame(width: 140)
+        .frame(width: 150)
         .task { market = MockSeedData.marketSnapshot(for: card.id) }
     }
 }
@@ -156,34 +148,40 @@ struct MarketCardRow: View {
 
     var body: some View {
         HStack(spacing: CIQSpacing.sm) {
-            RoundedRectangle(cornerRadius: CIQRadius.xs)
-                .fill(CIQColors.Fallback.backgroundTertiary)
-                .frame(width: 44, height: 60)
-                .overlay {
-                    Image(systemName: "photo")
-                        .font(CIQFont.caption)
-                        .foregroundStyle(CIQColors.Fallback.textTertiary)
-                }
+            CardArtworkView(card: card, size: .small)
 
             VStack(alignment: .leading, spacing: CIQSpacing.xxxs) {
                 Text(card.name)
                     .font(CIQFont.bodyBold)
                     .foregroundStyle(CIQColors.Fallback.textPrimary)
-                Text("\(card.setName) · \(card.displayNumber)")
-                    .font(CIQFont.caption)
-                    .foregroundStyle(CIQColors.Fallback.textSecondary)
+                HStack(spacing: CIQSpacing.xxs) {
+                    Text("\(card.setName) · \(card.displayNumber)")
+                        .font(CIQFont.caption)
+                        .foregroundStyle(CIQColors.Fallback.textSecondary)
+                }
+                if let market, let variant = card.variant {
+                    Text(variant)
+                        .font(CIQFont.caption)
+                        .foregroundStyle(CIQColors.Fallback.textTertiary)
+                    if market.salesVolume30Days > 100 {
+                        DataFreshnessLabel(text: "High confidence", icon: "checkmark.seal")
+                    }
+                }
             }
 
             Spacer()
 
             if let market {
                 VStack(alignment: .trailing, spacing: CIQSpacing.xxxs) {
-                    Text(market.rawEstimatedValue.currencyFormatted)
-                        .font(CIQFont.bodyBold)
+                    let lo = market.rawEstimatedValue * 0.95
+                    let hi = market.rawEstimatedValue * 1.05
+                    Text("\(lo.currencyFormatted)–\(hi.currencyFormatted)")
+                        .font(CIQFont.footnoteBold)
                         .foregroundStyle(CIQColors.Fallback.textPrimary)
-                    Text(market.thirtyDayChangePercentage >= 0 ? "+\(market.thirtyDayChangePercentage.percentFormatted)" : market.thirtyDayChangePercentage.percentFormatted)
-                        .font(CIQFont.captionBold)
-                        .foregroundStyle(market.thirtyDayChangePercentage >= 0 ? CIQColors.Fallback.positive : CIQColors.Fallback.negative)
+                    PriceChangeLabel(percentageChange: market.thirtyDayChangePercentage)
+                    Text("\(market.salesVolume30Days) sales")
+                        .font(CIQFont.caption)
+                        .foregroundStyle(CIQColors.Fallback.textTertiary)
                 }
             }
 
