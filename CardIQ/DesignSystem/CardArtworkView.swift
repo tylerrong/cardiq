@@ -294,28 +294,37 @@ struct CardArtworkView: View {
             let color = gradeColor(for: gradeBadge)
             Text(gradeBadge)
                 .font(size.gradeBadgeFont)
-                .foregroundStyle(color)
-                .padding(.horizontal, CIQSpacing.xs)
-                .padding(.vertical, CIQSpacing.xxxs)
-                .background(color.opacity(0.2))
-                .clipShape(Capsule())
-                .padding(CIQSpacing.xxs)
+                .foregroundStyle(.white.opacity(0.95))
+                .padding(.horizontal, size == .small ? 5 : CIQSpacing.xs)
+                .padding(.vertical, size == .small ? 2 : 3)
+                .background(.ultraThinMaterial)
+                .environment(\.colorScheme, .dark)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(color.opacity(0.35), lineWidth: 0.5)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .padding(size == .small ? 3 : CIQSpacing.xxs)
         }
     }
-
-    // MARK: - Recommendation Badge Overlay
 
     @ViewBuilder
     private var recommendationBadgeOverlay: some View {
         if size.showRecommendation, let rec = recommendationBadge {
             let color = recommendationColor(rec)
             Text(recommendationText(rec))
-                .font(CIQFont.captionBold)
+                .font(.system(size: 9, weight: .semibold))
+                .tracking(0.5)
                 .foregroundStyle(color)
                 .padding(.horizontal, CIQSpacing.xs)
-                .padding(.vertical, CIQSpacing.xxxs)
-                .background(color.opacity(0.15))
-                .clipShape(Capsule())
+                .padding(.vertical, 3)
+                .background(.ultraThinMaterial)
+                .environment(\.colorScheme, .dark)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 5)
+                        .strokeBorder(color.opacity(0.25), lineWidth: 0.5)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 5))
                 .padding(.bottom, CIQSpacing.xxs)
         }
     }
