@@ -31,7 +31,10 @@ struct CIQPrimaryButton: View {
     }
 
     var body: some View {
-        Button(action: action) {
+        Button(action: {
+            CIQHaptics.tap()
+            action()
+        }) {
             HStack(spacing: CIQSpacing.xs) {
                 if let icon {
                     Image(systemName: icon)
@@ -46,6 +49,7 @@ struct CIQPrimaryButton: View {
             .background(CIQColors.Fallback.accentPrimary)
             .clipShape(RoundedRectangle(cornerRadius: CIQRadius.button))
         }
+        .buttonStyle(PressableButtonStyle())
         .accessibilityLabel(title)
     }
 }
@@ -62,7 +66,10 @@ struct CIQSecondaryButton: View {
     }
 
     var body: some View {
-        Button(action: action) {
+        Button(action: {
+            CIQHaptics.tap()
+            action()
+        }) {
             HStack(spacing: CIQSpacing.xs) {
                 if let icon {
                     Image(systemName: icon)
@@ -81,6 +88,7 @@ struct CIQSecondaryButton: View {
                     .strokeBorder(CIQColors.Fallback.accentPrimary.opacity(0.3), lineWidth: 1)
             )
         }
+        .buttonStyle(PressableButtonStyle())
         .accessibilityLabel(title)
     }
 }

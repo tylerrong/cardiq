@@ -167,27 +167,17 @@ struct CaptureView: View {
     let instruction: String
     let onCapture: (Data) -> Void
     let onImport: (Data) -> Void
+    @State private var showFlash = false
     @State private var selectedPhoto: PhotosPickerItem?
 
     var body: some View {
+        ZStack {
         VStack(spacing: CIQSpacing.md) {
             Spacer()
 
-            ZStack {
-                RoundedRectangle(cornerRadius: CIQRadius.card)
-                    .strokeBorder(CIQColors.Fallback.accentPrimary, style: StrokeStyle(lineWidth: 2, dash: [8, 4]))
-                    .frame(width: 260, height: 364)
-                    .accessibilityLabel("Card alignment guide")
-
-                VStack(spacing: CIQSpacing.sm) {
-                    Image(systemName: "viewfinder")
-                        .font(.system(size: 48, weight: .light))
-                        .foregroundStyle(CIQColors.Fallback.accentPrimary.opacity(0.6))
-                    Text("Position card here")
-                        .font(CIQFont.footnote)
-                        .foregroundStyle(CIQColors.Fallback.textSecondary)
-                }
-            }
+            CardAlignmentOverlay()
+                .frame(width: 260, height: 364)
+                .accessibilityLabel("Card alignment guide")
 
             Text(instruction)
                 .font(CIQFont.subheadline)
@@ -223,7 +213,12 @@ struct CaptureView: View {
                 }
 
                 Button {
-                    onCapture(Data("mock_captured_image".utf8))
+                    CIQHaptics.tap()
+                    showFlash = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        showFlash = false
+                        onCapture(Data("mock_captured_image".utf8))
+                    }
                 } label: {
                     Circle()
                         .fill(.white)
@@ -248,6 +243,14 @@ struct CaptureView: View {
                 }
             }
             .padding(.bottom, CIQSpacing.xxxl)
+        }
+
+        if showFlash {
+            Color.white
+                .ignoresSafeArea()
+                .opacity(0.8)
+                .allowsHitTesting(false)
+        }
         }
     }
 }
@@ -425,32 +428,9 @@ struct ProcessingView: View {
                 .foregroundStyle(CIQColors.Fallback.textPrimary)
 
             VStack(alignment: .leading, spacing: CIQSpacing.sm) {
-                ForEach(steps) { step in
-                    HStack(spacing: CIQSpacing.sm) {
-                        Group {
-                            switch step.status {
-                            case .completed:
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(CIQColors.Fallback.positive)
-                            case .active:
-                                ProgressView()
-                                    .controlSize(.small)
-                                    .tint(CIQColors.Fallback.accentPrimary)
-                            case .pending:
-                                Image(systemName: "circle")
-                                    .foregroundStyle(CIQColors.Fallback.textTertiary)
-                            }
-                        }
-                        .frame(width: 22)
-
-                        Text(step.label)
-                            .font(CIQFont.subheadline)
-                            .foregroundStyle(
-                                step.status == .pending ? CIQColors.Fallback.textTertiary : CIQColors.Fallback.textPrimary
-                            )
-
-                        Spacer()
-                    }
+                ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
+                    ProcessingStepRow(step: step)
+                        .slideUp(delay: Double(index) * 0.08)
                 }
             }
             .padding(.horizontal, CIQSpacing.xxxl)
@@ -460,6 +440,92 @@ struct ProcessingView: View {
             CIQDisclaimerView()
                 .padding(.horizontal, CIQSpacing.md)
                 .padding(.bottom, CIQSpacing.xxl)
+        }
+    }
+}
+
+struct CardAlignmentOverlay: View {
+    @State private var breathing = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private let cornerLength: CGFloat = 28
+    private let lineWidth: CGFloat = 3
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            let color = CIQColors.Fallback.accentPrimary.opacity(breathing ? 0.9 : 0.5)
+
+            ZStack {
+                // Corner brackets
+                Group {
+                    cornerBracket(x: 0, y: 0, dx: 1, dy: 1)
+                    cornerBracket(x: w, y: 0, dx: -1, dy: 1)
+                    cornerBracket(x: 0, y: h, dx: 1, dy: -1)
+                    cornerBracket(x: w, y: h, dx: -1, dy: -1)
+                }
+                .foregroundStyle(color)
+
+                VStack(spacing: CIQSpacing.sm) {
+                    Image(systemName: "viewfinder")
+                        .font(.system(size: 40, weight: .light))
+                        .foregroundStyle(CIQColors.Fallback.accentPrimary.opacity(0.4))
+                    Text("Position card here")
+                        .font(CIQFont.footnote)
+                        .foregroundStyle(CIQColors.Fallback.textSecondary)
+                }
+            }
+        }
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                breathing = true
+            }
+        }
+    }
+
+    private func cornerBracket(x: CGFloat, y: CGFloat, dx: CGFloat, dy: CGFloat) -> some View {
+        Path { path in
+            path.move(to: CGPoint(x: x, y: y + dy * cornerLength))
+            path.addLine(to: CGPoint(x: x, y: y))
+            path.addLine(to: CGPoint(x: x + dx * cornerLength, y: y))
+        }
+        .stroke(style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
+    }
+}
+
+struct ProcessingStepRow: View {
+    let step: ProcessingStep
+
+    var body: some View {
+        HStack(spacing: CIQSpacing.sm) {
+            Group {
+                switch step.status {
+                case .completed:
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(CIQColors.Fallback.positive)
+                        .transition(.scale.combined(with: .opacity))
+                case .active:
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(CIQColors.Fallback.accentPrimary)
+                case .pending:
+                    Image(systemName: "circle")
+                        .foregroundStyle(CIQColors.Fallback.textTertiary)
+                }
+            }
+            .frame(width: 22)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: step.status == .completed)
+
+            Text(step.label)
+                .font(CIQFont.subheadline)
+                .foregroundStyle(
+                    step.status == .pending ? CIQColors.Fallback.textTertiary : CIQColors.Fallback.textPrimary
+                )
+                .animation(.easeInOut(duration: 0.2), value: step.status == .pending)
+
+            Spacer()
         }
     }
 }

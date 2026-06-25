@@ -12,20 +12,29 @@ struct GradeReportView: View {
     @State private var savedToCollection = false
     @State private var hasSavedScanRecord = false
 
+    @State private var showToast = false
+
     var body: some View {
         ZStack(alignment: .bottom) {
             ScrollView {
                 VStack(spacing: CIQSpacing.lg) {
                     gradeHeader
                     CIQDisclaimerView()
+                        .slideUp(delay: 1.2)
                     probabilitiesSection
+                        .slideUp(delay: 1.4)
                     categoryScoresSection
+                        .slideUp(delay: 1.6)
                     centeringSection
+                        .slideUp(delay: 1.8)
                     if !report.detectedDefects.isEmpty {
                         defectsSection
+                            .slideUp(delay: 2.0)
                     }
                     holdingBackSection
+                        .slideUp(delay: 2.2)
                     marketQuickView
+                        .slideUp(delay: 2.4)
                     Color.clear.frame(height: 80)
                 }
                 .padding(CIQSpacing.md)
@@ -61,16 +70,18 @@ struct GradeReportView: View {
             try? modelContext.save()
             hasSavedScanRecord = true
         }
+        .ciqToast(isPresented: $showToast, message: "Saved to collection")
     }
 
     private var gradeHeader: some View {
         CIQCard {
             VStack(spacing: CIQSpacing.md) {
-                CIQGradeCircle(grade: report.estimatedGrade, size: 140)
+                AnimatedGradeCircle(grade: report.estimatedGrade, size: 140)
 
                 Text(report.gradeDescriptor)
                     .font(CIQFont.title)
                     .foregroundStyle(CIQColors.Fallback.textPrimary)
+                    .slideUp(delay: 0.8)
 
                 HStack(spacing: CIQSpacing.sm) {
                     CIQBadge(text: "PSA Scale", color: CIQColors.Fallback.textSecondary)
@@ -79,6 +90,7 @@ struct GradeReportView: View {
                         color: report.confidence >= 0.8 ? CIQColors.Fallback.positive : CIQColors.Fallback.warning
                     )
                 }
+                .slideUp(delay: 1.0)
 
                 Text("\(card.setName) · \(card.displayNumber)")
                     .font(CIQFont.footnote)
@@ -264,6 +276,7 @@ struct GradeReportView: View {
                             modelContext.insert(item)
                             try? modelContext.save()
                             savedToCollection = true
+                            showToast = true
                             CIQHaptics.success()
                         } label: {
                             HStack(spacing: CIQSpacing.xxs) {
@@ -326,7 +339,7 @@ struct ProbabilityBar: View {
                 .foregroundStyle(CIQColors.Fallback.textSecondary)
                 .frame(width: 55, alignment: .leading)
 
-            CIQProgressBar(value: probability, color: color, height: 12)
+            AnimatedProgressBar(value: probability, color: color, height: 12)
 
             Text("\(Int(probability * 100))%")
                 .font(CIQFont.monoLarge)
@@ -358,7 +371,7 @@ struct CategoryScoreRow: View {
                 .foregroundStyle(CIQColors.Fallback.textSecondary)
                 .frame(width: 100, alignment: .leading)
 
-            CIQProgressBar(value: score / maxScore, color: color, height: 8)
+            AnimatedProgressBar(value: score / maxScore, color: color, height: 8)
 
             Text(String(format: "%.1f", score))
                 .font(CIQFont.monoLarge)

@@ -57,7 +57,7 @@ struct HomeView: View {
                         Text("Collection Value")
                             .font(CIQFont.footnote)
                             .foregroundStyle(CIQColors.Fallback.textSecondary)
-                        Text(viewModel.totalValue.currencyFormatted)
+                        AnimatedCounterText(value: viewModel.totalValue, format: .currency)
                             .font(CIQFont.heroValue)
                             .foregroundStyle(CIQColors.Fallback.textPrimary)
                     }

@@ -50,16 +50,19 @@ struct GradeROIView: View {
                 Image(systemName: viewModel.result.recommendation.icon)
                     .font(.system(size: 40))
                     .foregroundStyle(colorForRecommendation(viewModel.result.recommendation))
+                    .scaleIn(delay: 0.2)
 
                 Text(viewModel.result.recommendation.displayName)
                     .font(CIQFont.displayMedium)
                     .foregroundStyle(CIQColors.Fallback.textPrimary)
+                    .slideUp(delay: 0.4)
 
                 Text(viewModel.result.explanation)
                     .font(CIQFont.subheadline)
                     .foregroundStyle(CIQColors.Fallback.textSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
+                    .slideUp(delay: 0.6)
             }
         }
     }
