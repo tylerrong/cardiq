@@ -22,7 +22,7 @@ struct HomeView: View {
                     if !viewModel.recentScans.isEmpty {
                         recentScansSection
                     }
-                    Color.clear.frame(height: CIQSpacing.xxl)
+                    Color.clear.frame(height: 80)
                 }
                 .padding(.horizontal, CIQSpacing.md)
             }

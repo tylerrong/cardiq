@@ -18,22 +18,19 @@ struct MarketView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack(alignment: .bottomTrailing) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: CIQSpacing.lg) {
-                        if searchText.isEmpty {
-                            if !watchlistItems.isEmpty {
-                                watchlistSection
-                            }
-                            trendingSection
+            ScrollView {
+                VStack(alignment: .leading, spacing: CIQSpacing.lg) {
+                    if searchText.isEmpty {
+                        if !watchlistItems.isEmpty {
+                            watchlistSection
                         }
-
-                        allCardsSection
+                        trendingSection
                     }
-                    .padding(CIQSpacing.md)
-                }
 
-                chatFAB
+                    allCardsSection
+                    Color.clear.frame(height: 80)
+                }
+                .padding(CIQSpacing.md)
             }
             .background(CIQColors.Fallback.backgroundPrimary)
             .navigationTitle("Market")
@@ -43,30 +40,7 @@ struct MarketView: View {
                 allCards = MockSeedData.cards
                 trendingCards = [MockSeedData.cards[0], MockSeedData.cards[3], MockSeedData.cards[8], MockSeedData.cards[11]]
             }
-            .sheet(isPresented: $showChat) {
-                MarketChatView()
-            }
         }
-    }
-
-    private var chatFAB: some View {
-        Button { showChat = true } label: {
-            HStack(spacing: CIQSpacing.xs) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 16, weight: .semibold))
-                Text("Ask CardIQ")
-                    .font(CIQFont.headline)
-            }
-            .foregroundStyle(.black)
-            .padding(.horizontal, CIQSpacing.lg)
-            .padding(.vertical, CIQSpacing.sm)
-            .background(CIQColors.Fallback.accentPrimary)
-            .clipShape(Capsule())
-            .shadow(color: CIQColors.Fallback.accentPrimary.opacity(0.4), radius: 12, x: 0, y: 4)
-        }
-        .padding(.trailing, CIQSpacing.md)
-        .padding(.bottom, CIQSpacing.md)
-        .accessibilityLabel("Ask CardIQ about the market")
     }
 
     private var watchlistSection: some View {

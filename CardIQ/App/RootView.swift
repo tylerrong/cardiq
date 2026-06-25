@@ -14,27 +14,25 @@ struct RootView: View {
 
 struct MainTabView: View {
     @Environment(AppState.self) private var appState
+    @State private var showChat = false
 
     var body: some View {
         @Bindable var state = appState
-        TabView(selection: $state.selectedTab) {
-            Tab("Home", systemImage: "house.fill", value: AppTab.home) {
-                HomeView()
+        ZStack(alignment: .bottom) {
+            Group {
+                switch appState.selectedTab {
+                case .home: HomeView()
+                case .scan: ScanLaunchView()
+                case .collection: CollectionView()
+                case .market: MarketView()
+                case .profile: ProfileView()
+                }
             }
-            Tab("Scan", systemImage: "viewfinder", value: AppTab.scan) {
-                ScanLaunchView()
-            }
-            Tab("Collection", systemImage: "square.stack.3d.up.fill", value: AppTab.collection) {
-                CollectionView()
-            }
-            Tab("Market", systemImage: "chart.line.uptrend.xyaxis", value: AppTab.market) {
-                MarketView()
-            }
-            Tab("Profile", systemImage: "person.fill", value: AppTab.profile) {
-                ProfileView()
-            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            CIQTabBar(selectedTab: $state.selectedTab, onAskCardIQ: { showChat = true })
         }
-        .tint(CIQColors.Fallback.accentPrimary)
+        .ignoresSafeArea(.keyboard)
         #if os(iOS)
         .fullScreenCover(isPresented: $state.showScanner) {
             ScannerFlowView()
@@ -44,6 +42,76 @@ struct MainTabView: View {
             ScannerFlowView()
         }
         #endif
+        .sheet(isPresented: $showChat) {
+            MarketChatView()
+        }
+    }
+}
+
+struct CIQTabBar: View {
+    @Binding var selectedTab: AppTab
+    let onAskCardIQ: () -> Void
+
+    private let navTabs: [AppTab] = [.home, .scan, .collection, .profile]
+
+    var body: some View {
+        HStack(spacing: CIQSpacing.sm) {
+            HStack(spacing: 0) {
+                ForEach(navTabs, id: \.self) { tab in
+                    Button {
+                        CIQHaptics.select()
+                        selectedTab = tab
+                    } label: {
+                        Image(systemName: tabIcon(tab))
+                            .font(.system(size: 18, weight: selectedTab == tab ? .semibold : .regular))
+                            .foregroundStyle(selectedTab == tab ? CIQColors.Fallback.textPrimary : CIQColors.Fallback.textTertiary)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel(tab.title)
+                }
+            }
+            .padding(.horizontal, CIQSpacing.xs)
+            .padding(.vertical, CIQSpacing.xxs)
+            .background(.ultraThinMaterial)
+            .environment(\.colorScheme, .dark)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .strokeBorder(CIQColors.Fallback.borderSubtle.opacity(0.5), lineWidth: 0.5)
+            )
+
+            Button {
+                CIQHaptics.tap()
+                onAskCardIQ()
+            } label: {
+                HStack(spacing: CIQSpacing.xs) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("Ask CardIQ")
+                        .font(.system(size: 15, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, CIQSpacing.lg)
+                .frame(minHeight: 48)
+                .background(CIQColors.Fallback.accentPrimary)
+                .clipShape(Capsule())
+            }
+            .buttonStyle(PressableButtonStyle())
+            .accessibilityLabel("Ask CardIQ")
+        }
+        .padding(.horizontal, CIQSpacing.md)
+        .padding(.bottom, CIQSpacing.xs)
+    }
+
+    private func tabIcon(_ tab: AppTab) -> String {
+        switch tab {
+        case .home: "chart.line.uptrend.xyaxis"
+        case .scan: "viewfinder"
+        case .collection: "square.stack.3d.up.fill"
+        case .market: "tag"
+        case .profile: "person"
+        }
     }
 }
 
