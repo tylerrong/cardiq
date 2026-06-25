@@ -1,23 +1,16 @@
-//
-//  CardIQApp.swift
-//  CardIQ
-//
-//  Created by Tyler Rong on 6/24/26.
-//
-
 import SwiftUI
 import SwiftData
 
 @main
 struct CardIQApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+    @State private var appState = AppState()
+    private let services = ServiceContainer.shared
 
+    var sharedModelContainer: ModelContainer = {
+        let schema = Schema([CollectionItem.self, ScanRecord.self, WatchlistItem.self])
+        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            return try ModelContainer(for: schema, configurations: [config])
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }
@@ -25,7 +18,9 @@ struct CardIQApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
+                .environment(appState)
+                .preferredColorScheme(.dark)
         }
         .modelContainer(sharedModelContainer)
     }
