@@ -77,9 +77,10 @@ final class CollectionItem {
         if let officialGrade, let market = marketSnapshot {
             switch officialGrade {
             case 10: return market.psa10EstimatedValue
-            case 9...9.5: return market.psa9EstimatedValue
-            case 8...8.5: return market.psa8EstimatedValue
-            default: return market.rawEstimatedValue
+            case 9..<10: return market.psa9EstimatedValue
+            case 8..<9: return market.psa8EstimatedValue
+            case 7..<8: return market.rawEstimatedValue * 0.9
+            default: return market.rawEstimatedValue * 0.7
             }
         }
         return marketSnapshot?.rawEstimatedValue ?? 0

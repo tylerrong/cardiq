@@ -197,9 +197,9 @@ struct DefaultGradeROICalculator: GradeROICalculator {
         let recommendation: GradeRecommendation
         if gradingUplift > totalGradingCost * 0.5 {
             recommendation = .grade
-        } else if gradingUplift > 0 {
+        } else if gradingUplift > totalGradingCost * 0.1 {
             recommendation = .considerGrading
-        } else if gradingUplift > -totalGradingCost * 0.3 {
+        } else if gradingUplift > -totalGradingCost * 0.1 {
             recommendation = .hold
         } else {
             recommendation = .sellRaw

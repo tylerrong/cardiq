@@ -108,18 +108,18 @@ enum MockSeedData {
     }
 
     private static let marketValues: [String: (raw: Double, psa8: Double, psa9: Double, psa10: Double)] = [
-        "sv4-227": (raw: 185.0, psa8: 220.0, psa9: 350.0, psa10: 850.0),
-        "sv3pt5-207": (raw: 145.0, psa8: 175.0, psa9: 280.0, psa10: 620.0),
-        "sv1-254": (raw: 55.0, psa8: 70.0, psa9: 120.0, psa10: 310.0),
-        "sv6-230": (raw: 95.0, psa8: 125.0, psa9: 200.0, psa10: 475.0),
-        "sv3-197": (raw: 35.0, psa8: 50.0, psa9: 85.0, psa10: 220.0),
-        "sv2-191": (raw: 22.0, psa8: 35.0, psa9: 60.0, psa10: 165.0),
-        "sv5-208": (raw: 18.0, psa8: 28.0, psa9: 45.0, psa10: 110.0),
-        "sv1-198": (raw: 12.0, psa8: 20.0, psa9: 35.0, psa10: 95.0),
-        "sv6pt5-175": (raw: 72.0, psa8: 95.0, psa9: 160.0, psa10: 380.0),
-        "sv4-rh-025": (raw: 2.50, psa8: 8.0, psa9: 15.0, psa10: 45.0),
-        "sv3pt5-001": (raw: 1.50, psa8: 5.0, psa9: 12.0, psa10: 35.0),
-        "sv7-243": (raw: 110.0, psa8: 140.0, psa9: 230.0, psa10: 520.0),
+        "sv4-227": (raw: 185.0, psa8: 260.0, psa9: 350.0, psa10: 850.0),
+        "sv3pt5-207": (raw: 145.0, psa8: 210.0, psa9: 280.0, psa10: 620.0),
+        "sv1-254": (raw: 55.0, psa8: 80.0, psa9: 120.0, psa10: 310.0),
+        "sv6-230": (raw: 95.0, psa8: 140.0, psa9: 200.0, psa10: 475.0),
+        "sv3-197": (raw: 35.0, psa8: 55.0, psa9: 85.0, psa10: 220.0),
+        "sv2-191": (raw: 22.0, psa8: 38.0, psa9: 60.0, psa10: 165.0),
+        "sv5-208": (raw: 18.0, psa8: 30.0, psa9: 48.0, psa10: 110.0),
+        "sv1-198": (raw: 12.0, psa8: 22.0, psa9: 38.0, psa10: 95.0),
+        "sv6pt5-175": (raw: 72.0, psa8: 105.0, psa9: 160.0, psa10: 380.0),
+        "sv4-rh-025": (raw: 2.50, psa8: 6.0, psa9: 12.0, psa10: 22.0),
+        "sv3pt5-001": (raw: 1.50, psa8: 4.0, psa9: 8.0, psa10: 15.0),
+        "sv7-243": (raw: 110.0, psa8: 160.0, psa9: 230.0, psa10: 520.0),
     ]
 
     private static let changePercentages: [String: (thirty: Double, ninety: Double, year: Double)] = [
@@ -138,9 +138,9 @@ enum MockSeedData {
     ]
 
     private static let salesVolumes: [String: Int] = [
-        "sv4-227": 127, "sv3pt5-207": 89, "sv1-254": 156, "sv6-230": 64,
-        "sv3-197": 210, "sv2-191": 178, "sv5-208": 95, "sv1-198": 245,
-        "sv6pt5-175": 52, "sv4-rh-025": 340, "sv3pt5-001": 410, "sv7-243": 38,
+        "sv4-227": 285, "sv3pt5-207": 195, "sv1-254": 160, "sv6-230": 175,
+        "sv3-197": 120, "sv2-191": 105, "sv5-208": 65, "sv1-198": 90,
+        "sv6pt5-175": 145, "sv4-rh-025": 45, "sv3pt5-001": 30, "sv7-243": 110,
     ]
 
     private static let liquidityScores: [String: Double] = [
@@ -192,21 +192,29 @@ enum MockSeedData {
         let config = gradingConfigs[cardId] ?? defaultGradingConfig
         let adjustedGrade = min(10, config.grade * qualityMultiplier)
 
+        let q = qualityMultiplier
+        let q2 = q * q
+        let p10 = config.psa10 * q2
+        let p9 = config.psa9 * q
+        let p8 = config.psa8 * max(q, 0.5)
+        let pSum = p10 + p9 + p8
+        let p7 = max(0, 1.0 - pSum)
+
         return GradingReport(
             estimatedGrade: adjustedGrade,
-            confidence: config.confidence,
-            psa10Probability: config.psa10 * qualityMultiplier,
-            psa9Probability: config.psa9,
-            psa8Probability: config.psa8,
-            psa7OrLowerProbability: max(0, 1.0 - (config.psa10 * qualityMultiplier + config.psa9 + config.psa8)),
+            confidence: config.confidence * max(q, 0.5),
+            psa10Probability: p10,
+            psa9Probability: p9,
+            psa8Probability: p8,
+            psa7OrLowerProbability: p7,
             frontCenteringHorizontal: config.frontCH,
             frontCenteringVertical: config.frontCV,
             backCenteringHorizontal: config.backCH,
             backCenteringVertical: config.backCV,
-            cornerScore: config.corners,
-            edgeScore: config.edges,
-            surfaceScore: config.surface,
-            printQualityScore: config.print,
+            cornerScore: config.corners * q,
+            edgeScore: config.edges * q,
+            surfaceScore: config.surface * q,
+            printQualityScore: config.print * q,
             detectedDefects: config.defects,
             explanation: config.explanation,
             createdAt: Date()
@@ -233,7 +241,7 @@ enum MockSeedData {
 
     private static let defaultGradingConfig = GradingConfig(
         grade: 8.5, confidence: 0.78,
-        psa10: 0.10, psa9: 0.35, psa8: 0.40,
+        psa10: 0.05, psa9: 0.30, psa8: 0.45,
         frontCH: 0.54, frontCV: 0.51, backCH: 0.56, backCV: 0.52,
         corners: 8.0, edges: 8.5, surface: 9.0, print: 9.0,
         defects: [
@@ -245,7 +253,7 @@ enum MockSeedData {
     private static let gradingConfigs: [String: GradingConfig] = [
         "sv4-227": GradingConfig(
             grade: 9.0, confidence: 0.82,
-            psa10: 0.25, psa9: 0.45, psa8: 0.22,
+            psa10: 0.08, psa9: 0.52, psa8: 0.30,
             frontCH: 0.52, frontCV: 0.51, backCH: 0.54, backCV: 0.52,
             corners: 9.0, edges: 9.0, surface: 9.5, print: 9.5,
             defects: [
@@ -256,7 +264,7 @@ enum MockSeedData {
         ),
         "sv3pt5-207": GradingConfig(
             grade: 9.5, confidence: 0.85,
-            psa10: 0.40, psa9: 0.42, psa8: 0.14,
+            psa10: 0.55, psa9: 0.32, psa8: 0.10,
             frontCH: 0.51, frontCV: 0.50, backCH: 0.52, backCV: 0.51,
             corners: 9.5, edges: 9.5, surface: 10.0, print: 9.5,
             defects: [
@@ -266,7 +274,7 @@ enum MockSeedData {
         ),
         "sv1-254": GradingConfig(
             grade: 7.5, confidence: 0.80,
-            psa10: 0.02, psa9: 0.12, psa8: 0.35,
+            psa10: 0.01, psa9: 0.06, psa8: 0.38,
             frontCH: 0.58, frontCV: 0.55, backCH: 0.60, backCV: 0.54,
             corners: 7.5, edges: 8.0, surface: 8.5, print: 9.0,
             defects: [
@@ -278,7 +286,7 @@ enum MockSeedData {
         ),
         "sv6-230": GradingConfig(
             grade: 9.5, confidence: 0.88,
-            psa10: 0.45, psa9: 0.40, psa8: 0.12,
+            psa10: 0.60, psa9: 0.28, psa8: 0.09,
             frontCH: 0.50, frontCV: 0.51, backCH: 0.51, backCV: 0.50,
             corners: 9.5, edges: 9.5, surface: 9.5, print: 10.0,
             defects: [],
@@ -290,7 +298,7 @@ enum MockSeedData {
             frontCH: 0.62, frontCV: 0.58, backCH: 0.55, backCV: 0.53,
             corners: 6.0, edges: 7.0, surface: 7.5, print: 8.0,
             defects: [
-                DetectedDefect(id: "rh025-d1", type: .offCentering, severity: .severe, confidence: 0.95, locationDescription: "Front horizontal 62/38", normalizedBoundingBox: nil, explanation: "Severe off-centering at 62/38. This exceeds even PSA 8 tolerances and will significantly limit the grade."),
+                DetectedDefect(id: "rh025-d1", type: .offCentering, severity: .severe, confidence: 0.95, locationDescription: "Front horizontal 62/38", normalizedBoundingBox: nil, explanation: "Severe off-centering at 62/38. This is within PSA 8 tolerance (65/35) but exceeds PSA 9 (60/40). Combined with other defects, centering further limits the grade."),
                 DetectedDefect(id: "rh025-d2", type: .cornerWhitening, severity: .moderate, confidence: 0.90, locationDescription: "All four corners", normalizedBoundingBox: CIQRect(x: 0, y: 0, width: 1, height: 1), explanation: "Whitening visible on all four corners. Consistent with played condition."),
                 DetectedDefect(id: "rh025-d3", type: .surfaceWear, severity: .moderate, confidence: 0.82, locationDescription: "Center of card face", normalizedBoundingBox: CIQRect(x: 0.2, y: 0.2, width: 0.6, height: 0.6), explanation: "Light surface scratching visible across the holo pattern. Common in reverse holo cards that have been handled."),
             ],
