@@ -1,6 +1,9 @@
 import SwiftUI
 import PhotosUI
 import ImageIO
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct ScannerFlowView: View {
     @Environment(AppState.self) private var appState
@@ -170,15 +173,26 @@ struct CaptureView: View {
     let onImport: (Data) -> Void
     @State private var showFlash = false
     @State private var selectedPhoto: PhotosPickerItem?
+    #if canImport(UIKit)
+    @StateObject private var camera = CardCameraController()
+    #endif
 
     var body: some View {
         ZStack {
         VStack(spacing: CIQSpacing.md) {
             Spacer()
 
-            CardAlignmentOverlay()
-                .frame(width: 260, height: 364)
-                .accessibilityLabel("Card alignment guide")
+            ZStack {
+                #if canImport(UIKit)
+                CameraPreview(session: camera.session)
+                #else
+                Color.black
+                #endif
+                CardAlignmentOverlay()
+            }
+            .frame(width: 260, height: 364)
+            .clipShape(RoundedRectangle(cornerRadius: CIQRadius.lg))
+            .accessibilityLabel("Card camera preview")
 
             Text(instruction)
                 .font(CIQFont.subheadline)
@@ -207,8 +221,6 @@ struct CaptureView: View {
                     Task {
                         if let data = try? await newValue?.loadTransferable(type: Data.self) {
                             onImport(data)
-                        } else {
-                            onCapture(Data("mock_image_from_picker".utf8))
                         }
                     }
                 }
@@ -216,10 +228,12 @@ struct CaptureView: View {
                 Button {
                     CIQHaptics.tap()
                     showFlash = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    #if canImport(UIKit)
+                    camera.capture { data in
                         showFlash = false
-                        onCapture(Data("mock_captured_image".utf8))
+                        onCapture(data)
                     }
+                    #endif
                 } label: {
                     Circle()
                         .fill(.white)
@@ -253,6 +267,10 @@ struct CaptureView: View {
                 .allowsHitTesting(false)
         }
         }
+        #if canImport(UIKit)
+        .onAppear { camera.start() }
+        .onDisappear { camera.stop() }
+        #endif
     }
 }
 

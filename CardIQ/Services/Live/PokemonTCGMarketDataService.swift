@@ -27,7 +27,7 @@ final class PokemonTCGMarketDataService: MarketDataService {
     }
 
     func trendingCards() async throws -> [CardIdentity] {
-        (try? await client.searchRaw(query: "rarity:\"Special Illustration Rare\"", pageSize: 10)) ?? []
+        (try? await client.searchRaw(query: "(set.id:sv6 OR set.id:sv7 OR set.id:sv8) rarity:\"Special Illustration Rare\"", pageSize: 10)) ?? []
     }
 }
 

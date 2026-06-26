@@ -25,19 +25,26 @@ final class PokemonTCGCardIdentificationService: CardIdentificationService {
         // Simulator's placeholder data, since there's no camera — fall back to a
         // live browse list so the scan flow still surfaces real candidate cards
         // instead of hard-failing. On a real device a genuine photo is read here.
-        let lines: [String]
+        let lines: [RecognizedLine]
         do {
-            lines = try await CardTextRecognizer.recognizeLines(in: frontImage)
+            lines = try await CardTextRecognizer.recognize(in: frontImage)
         } catch {
             return await allCards()
         }
 
         guard let guess = CardTextHeuristics.bestGuess(from: lines) else {
-            // Valid image but no readable card text — ask the user to retake.
             throw CIQError.identificationFailed
         }
 
-        let matches = try await client.searchCards(name: guess.name, number: guess.number)
+        // The collector number "NNN/NNN" is the most reliable id — number + set total
+        // pin the exact card. Fall back to the name only when the number isn't read.
+        let matches: [CardIdentity]
+        if let number = guess.number, let total = guess.setTotal {
+            matches = try await client.searchByNumber(number: number, setTotal: total, name: guess.name)
+        } else {
+            matches = try await client.searchCards(name: guess.name, number: guess.number)
+        }
+
         guard !matches.isEmpty else { throw CIQError.identificationFailed }
         return CardTextHeuristics.rank(matches, against: guess)
     }
@@ -50,7 +57,7 @@ final class PokemonTCGCardIdentificationService: CardIdentificationService {
 
     func allCards() async -> [CardIdentity] {
         // Default browse feed: recent high-interest Scarlet & Violet chase cards.
-        (try? await client.searchRaw(query: "rarity:\"Special Illustration Rare\"", pageSize: 30)) ?? []
+        (try? await client.searchRaw(query: "(set.id:sv6 OR set.id:sv7 OR set.id:sv8) rarity:\"Special Illustration Rare\"", pageSize: 30)) ?? []
     }
 }
 
@@ -69,6 +76,17 @@ final class PokemonTCGClient {
     /// Forgiving name (+ optional collector number) search.
     func searchCards(name: String, number: String?) async throws -> [CardIdentity] {
         try await searchRaw(query: Self.buildQuery(name: name, number: number), pageSize: 20)
+    }
+
+    /// Strongest lookup: collector number + set printed total (the "NNN/NNN" on the
+    /// card) pin the exact set and card. Falls back to a name search if it misses.
+    func searchByNumber(number: String, setTotal: String, name: String) async throws -> [CardIdentity] {
+        let exact = try await searchRaw(
+            query: "number:\(number) set.printedTotal:\(setTotal)",
+            pageSize: 10
+        )
+        if !exact.isEmpty { return exact }
+        return try await searchCards(name: name, number: number)
     }
 
     /// Raw Lucene-style query against `/cards`.
@@ -276,26 +294,36 @@ enum PokemonTCGMapper {
 
 // MARK: - On-device OCR (Vision)
 
-enum CardTextRecognizer {
-    /// Recognizes text lines from card image data, ordered as Vision returns them.
-    static func recognizeLines(in imageData: Data) async throws -> [String] {
-        try await Task.detached(priority: .userInitiated) {
-            guard
-                let source = CGImageSourceCreateWithData(imageData as CFData, nil),
-                let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil)
-            else {
-                throw CIQError.identificationFailed
-            }
+struct RecognizedLine: Sendable {
+    let text: String
+    let midY: CGFloat   // Vision space: 0 = bottom, 1 = top
+    let height: CGFloat // relative glyph height ≈ font size
+}
 
+enum CardTextRecognizer {
+    /// Recognizes text from card image data, preserving each line's position so the
+    /// heuristics can use it (name = top + biggest font; number = NNN/NNN near bottom).
+    static func recognize(in imageData: Data) async throws -> [RecognizedLine] {
+        try await Task.detached(priority: .userInitiated) {
             let request = VNRecognizeTextRequest()
             request.recognitionLevel = .accurate
             request.usesLanguageCorrection = false
 
-            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+            // Data-based handler applies the image's EXIF orientation. Photos from
+            // the picker/camera are often rotated; a CGImage handler ignores that and
+            // OCR comes back sideways/unreadable. Throws on non-image bytes (e.g. the
+            // Simulator placeholder) → caught upstream as the browse fallback.
+            let handler = VNImageRequestHandler(data: imageData, options: [:])
             try handler.perform([request])
 
-            let observations = request.results ?? []
-            return observations.compactMap { $0.topCandidates(1).first?.string }
+            return (request.results ?? []).compactMap { observation in
+                guard let text = observation.topCandidates(1).first?.string else { return nil }
+                return RecognizedLine(
+                    text: text,
+                    midY: observation.boundingBox.midY,
+                    height: observation.boundingBox.height
+                )
+            }
         }.value
     }
 }
@@ -306,35 +334,63 @@ enum CardTextHeuristics {
     struct Guess {
         let name: String
         let number: String?
+        let setTotal: String?
     }
 
-    static func bestGuess(from lines: [String]) -> Guess? {
+    private static let nonNamePrefixes = ["basic", "stage", "evolves", "ability", "hp", "weakness", "resistance", "retreat", "no."]
+
+    static func bestGuess(from lines: [RecognizedLine]) -> Guess? {
         guard !lines.isEmpty else { return nil }
 
-        let number = lines.compactMap { extractNumber(from: $0) }.first
+        // Collector number "NNN/NNN" near the bottom — the most reliable id (the
+        // total pins the set, the numerator the card).
+        let collector = lines
+            .sorted { $0.midY < $1.midY }
+            .compactMap { collectorNumber(in: $0.text) }
+            .first
 
-        let nameCandidates = lines
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { $0.count >= 3 && $0.rangeOfCharacter(from: .letters) != nil }
+        // Card name: top of the card (high midY in Vision space), biggest font,
+        // skipping structural labels (HP, Stage, Ability, attack text, etc.).
+        let topName = lines
+            .filter { $0.midY > 0.55 && isNameLike($0.text) }
+            .max(by: { $0.height < $1.height })?.text
+        let fallbackName = lines
+            .filter { isNameLike($0.text) }
+            .max(by: { $0.height < $1.height })?.text
+        let rawName = topName ?? fallbackName
 
-        guard let name = nameCandidates.max(by: { score($0) < score($1) }) else {
-            return nil
-        }
-        return Guess(name: name, number: number)
+        // Identify off a number or a name (number alone is enough and most accurate).
+        guard collector != nil || rawName != nil else { return nil }
+
+        return Guess(
+            name: rawName.map(cleanName) ?? "",
+            number: collector?.numerator,
+            setTotal: collector?.total
+        )
     }
 
-    /// Extracts the numerator of a "NNN/NNN" collector number.
-    private static func extractNumber(from line: String) -> String? {
-        guard let slash = line.firstIndex(of: "/") else { return nil }
-        let lhs = line[..<slash].filter { $0.isNumber }
-        return lhs.isEmpty ? nil : String(lhs)
+    private static func isNameLike(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        if nonNamePrefixes.contains(where: { lower.hasPrefix($0) }) { return false }
+        return text.filter { $0.isLetter }.count >= 3
     }
 
-    /// Pokémon names tend to be mixed-case, letter-heavy, moderately short lines.
-    private static func score(_ line: String) -> Int {
-        let letters = line.filter { $0.isLetter }.count
-        let hasLower = line.contains { $0.isLowercase }
-        return letters + (hasLower ? 5 : 0) - (line.count > 30 ? 10 : 0)
+    /// Cleans OCR noise from a name: "Charizard@X" -> "Charizard ex", strips symbols.
+    private static func cleanName(_ raw: String) -> String {
+        var s = raw.replacingOccurrences(of: "@X", with: " ex")
+                   .replacingOccurrences(of: "@x", with: " ex")
+        s = String(s.filter { $0.isLetter || $0.isNumber || $0 == " " || $0 == "'" })
+        return s.replacingOccurrences(of: "  ", with: " ").trimmingCharacters(in: .whitespaces)
+    }
+
+    /// Returns the numerator and set-total of a "NNN/NNN" collector number.
+    private static func collectorNumber(in text: String) -> (numerator: String, total: String)? {
+        guard let regex = try? NSRegularExpression(pattern: "\\b(\\d{1,3})/(\\d{1,3})\\b") else { return nil }
+        let range = NSRange(text.startIndex..., in: text)
+        guard let match = regex.firstMatch(in: text, range: range),
+              let numeratorRange = Range(match.range(at: 1), in: text),
+              let totalRange = Range(match.range(at: 2), in: text) else { return nil }
+        return (String(text[numeratorRange]), String(text[totalRange]))
     }
 
     static func rank(_ cards: [CardIdentity], against guess: Guess) -> [CardIdentity] {
@@ -348,10 +404,17 @@ enum CardTextHeuristics {
     }
 
     private static func confidence(_ card: CardIdentity, _ guess: Guess) -> Double {
+        // Exact collector number + set total is a near-certain, unique match —
+        // even if the OCR'd name is noisy.
+        if let number = guess.number, let total = guess.setTotal,
+           card.cardNumber == "\(number)/\(total)" {
+            return 0.97
+        }
+
         var score = 0.5
         let cardName = card.name.lowercased()
         let guessName = guess.name.lowercased()
-        if cardName.contains(guessName) || guessName.contains(cardName) {
+        if !guessName.isEmpty, cardName.contains(guessName) || guessName.contains(cardName) {
             score += 0.3
         }
         if let number = guess.number, card.cardNumber.hasPrefix(number) {

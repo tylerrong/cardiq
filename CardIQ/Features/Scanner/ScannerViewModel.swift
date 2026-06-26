@@ -6,7 +6,7 @@ import PhotosUI
 @Observable
 @MainActor
 final class ScannerViewModel {
-    var currentStep: ScannerStep = .instructions
+    var currentStep: ScannerStep = .frontCapture
     var frontImage: Data?
     var backImage: Data?
     var surfaceImage: Data?
@@ -37,7 +37,7 @@ final class ScannerViewModel {
         do {
             frontQuality = try await services.imageQuality.assess(image: data, captureType: .front)
             if frontQuality?.passesMinimumQuality == true {
-                currentStep = .backCapture
+                currentStep = .optionalSurfaceCapture
             }
         } catch {
             self.error = .poorImageQuality("Could not assess image quality.")
@@ -45,7 +45,7 @@ final class ScannerViewModel {
     }
 
     func acceptFrontWithWarnings() {
-        currentStep = .backCapture
+        currentStep = .optionalSurfaceCapture
     }
 
     func retakeFront() {
@@ -114,11 +114,11 @@ final class ScannerViewModel {
                 }
             }
 
-            guard let frontData = frontImage, let backData = backImage else {
-                throw CIQError.poorImageQuality("Missing card images.")
+            guard let frontData = frontImage else {
+                throw CIQError.poorImageQuality("Missing card image.")
             }
 
-            let results = try await services.cardIdentification.identify(frontImage: frontData, backImage: backData)
+            let results = try await services.cardIdentification.identify(frontImage: frontData, backImage: backImage)
             guard !results.isEmpty else { throw CIQError.identificationFailed }
             identificationResults = results
 
@@ -145,14 +145,14 @@ final class ScannerViewModel {
         isProcessing = true
 
         do {
-            guard let frontData = frontImage, let backData = backImage else {
-                throw CIQError.poorImageQuality("Missing card images.")
+            guard let frontData = frontImage else {
+                throw CIQError.poorImageQuality("Missing card image.")
             }
 
             let report = try await services.cardGrading.analyze(
                 cardId: card.id,
                 frontImage: frontData,
-                backImage: backData,
+                backImage: backImage ?? frontData,
                 surfaceImage: surfaceImage
             )
             gradingReport = report
@@ -185,7 +185,7 @@ final class ScannerViewModel {
         selectedCard = nil
         gradingReport = nil
         marketSnapshot = nil
-        currentStep = .instructions
+        currentStep = .frontCapture
     }
 
     func useMockImages() {
