@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import ImageIO
 
 struct ScannerFlowView: View {
     @Environment(AppState.self) private var appState
@@ -299,23 +300,39 @@ struct ImageReviewView: View {
     let onAcceptWithWarnings: () -> Void
     let onRetake: () -> Void
 
+    private var capturedImage: CGImage? {
+        guard let imageData,
+              let source = CGImageSourceCreateWithData(imageData as CFData, nil) else { return nil }
+        return CGImageSourceCreateImageAtIndex(source, 0, nil)
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: CIQSpacing.lg) {
-                RoundedRectangle(cornerRadius: CIQRadius.card)
-                    .fill(CIQColors.Fallback.backgroundTertiary)
-                    .frame(height: 300)
-                    .overlay {
-                        VStack(spacing: CIQSpacing.xs) {
-                            Image(systemName: "photo")
-                                .font(.system(size: 48))
-                                .foregroundStyle(CIQColors.Fallback.textTertiary)
-                            Text("\(side) Image Captured")
-                                .font(CIQFont.footnote)
-                                .foregroundStyle(CIQColors.Fallback.textSecondary)
-                        }
+                Group {
+                    if let capturedImage {
+                        Image(decorative: capturedImage, scale: 1, orientation: .up)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxHeight: 300)
+                            .clipShape(RoundedRectangle(cornerRadius: CIQRadius.card))
+                    } else {
+                        RoundedRectangle(cornerRadius: CIQRadius.card)
+                            .fill(CIQColors.Fallback.backgroundTertiary)
+                            .frame(height: 300)
+                            .overlay {
+                                VStack(spacing: CIQSpacing.xs) {
+                                    Image(systemName: "photo")
+                                        .font(.system(size: 48))
+                                        .foregroundStyle(CIQColors.Fallback.textTertiary)
+                                    Text("\(side) Image Captured")
+                                        .font(CIQFont.footnote)
+                                        .foregroundStyle(CIQColors.Fallback.textSecondary)
+                                }
+                            }
                     }
-                    .padding(.horizontal, CIQSpacing.md)
+                }
+                .padding(.horizontal, CIQSpacing.md)
 
                 if let quality {
                     qualitySection(quality)

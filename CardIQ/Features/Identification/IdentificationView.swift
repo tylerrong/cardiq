@@ -58,19 +58,8 @@ struct IdentificationView: View {
                     )
                 }
 
-                RoundedRectangle(cornerRadius: CIQRadius.sm)
-                    .fill(CIQColors.Fallback.backgroundTertiary)
-                    .frame(height: 200)
-                    .overlay {
-                        VStack(spacing: CIQSpacing.xs) {
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 36))
-                                .foregroundStyle(CIQColors.Fallback.accentPrimary)
-                            Text(card.name)
-                                .font(CIQFont.headline)
-                                .foregroundStyle(CIQColors.Fallback.textPrimary)
-                        }
-                    }
+                CardArtworkView(card: card, size: .large)
+                    .frame(maxWidth: .infinity)
 
                 VStack(spacing: CIQSpacing.xs) {
                     CIQMetricRow("Name", value: card.name)
@@ -124,14 +113,7 @@ struct IdentificationView: View {
             ForEach(displayResults) { card in
                 Button { onConfirm(card) } label: {
                     HStack(spacing: CIQSpacing.sm) {
-                        RoundedRectangle(cornerRadius: CIQRadius.xs)
-                            .fill(CIQColors.Fallback.backgroundTertiary)
-                            .frame(width: 40, height: 56)
-                            .overlay {
-                                Image(systemName: "photo")
-                                    .font(CIQFont.caption)
-                                    .foregroundStyle(CIQColors.Fallback.textTertiary)
-                            }
+                        CardArtworkView(card: card, size: .small)
 
                         VStack(alignment: .leading, spacing: CIQSpacing.xxxs) {
                             Text(card.name)

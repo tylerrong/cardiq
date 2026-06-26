@@ -129,6 +129,7 @@ struct CollectionView: View {
                     seedCollection()
                     hasSeedLoaded = true
                 }
+                CIQImageCache.shared.prefetchThumbnails(for: items.compactMap(\.cardIdentity))
             }
         }
     }

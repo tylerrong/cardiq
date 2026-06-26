@@ -119,6 +119,7 @@ final class ScannerViewModel {
             }
 
             let results = try await services.cardIdentification.identify(frontImage: frontData, backImage: backData)
+            guard !results.isEmpty else { throw CIQError.identificationFailed }
             identificationResults = results
 
             if let topMatch = results.first, topMatch.identificationConfidence >= 0.85 {
@@ -176,6 +177,14 @@ final class ScannerViewModel {
 
     func retry() {
         error = nil
+        isProcessing = false
+        frontImage = nil
+        backImage = nil
+        surfaceImage = nil
+        identificationResults = []
+        selectedCard = nil
+        gradingReport = nil
+        marketSnapshot = nil
         currentStep = .instructions
     }
 

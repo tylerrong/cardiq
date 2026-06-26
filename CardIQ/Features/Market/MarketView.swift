@@ -37,8 +37,9 @@ struct MarketView: View {
             .ciqNavigationBarStyle()
             .searchable(text: $searchText, prompt: "Search cards...")
             .task {
-                allCards = MockSeedData.cards
-                trendingCards = [MockSeedData.cards[0], MockSeedData.cards[3], MockSeedData.cards[8], MockSeedData.cards[11]]
+                allCards = await ServiceContainer.shared.cardIdentification.allCards()
+                trendingCards = (try? await ServiceContainer.shared.marketData.trendingCards()) ?? []
+                CIQImageCache.shared.prefetchThumbnails(for: allCards + trendingCards)
             }
         }
     }
@@ -100,19 +101,27 @@ struct TrendingCardCell: View {
                 .lineLimit(1)
 
             if let market {
-                HStack(spacing: CIQSpacing.xs) {
-                    Text(market.rawEstimatedValue.currencyFormatted)
-                        .font(CIQFont.bodyBold)
-                        .foregroundStyle(CIQColors.Fallback.textPrimary)
-                    PriceChangeLabel(percentageChange: market.thirtyDayChangePercentage)
+                if market.rawEstimatedValue > 0 {
+                    HStack(spacing: CIQSpacing.xs) {
+                        Text(market.rawEstimatedValue.currencyFormatted)
+                            .font(CIQFont.bodyBold)
+                            .foregroundStyle(CIQColors.Fallback.textPrimary)
+                        PriceChangeLabel(percentageChange: market.thirtyDayChangePercentage)
+                    }
+                } else {
+                    Text("Price unavailable")
+                        .font(CIQFont.caption)
+                        .foregroundStyle(CIQColors.Fallback.textTertiary)
                 }
-                Text("\(market.salesVolume30Days) sales")
-                    .font(CIQFont.caption)
-                    .foregroundStyle(CIQColors.Fallback.textTertiary)
+                if market.salesVolume30Days > 0 {
+                    Text("\(market.salesVolume30Days) sales")
+                        .font(CIQFont.caption)
+                        .foregroundStyle(CIQColors.Fallback.textTertiary)
+                }
             }
         }
         .frame(width: 150)
-        .task { market = MockSeedData.marketSnapshot(for: card.id) }
+        .task { market = await MarketSnapshotCache.shared.snapshot(for: card.id) }
     }
 }
 
@@ -147,15 +156,23 @@ struct MarketCardRow: View {
 
             if let market {
                 VStack(alignment: .trailing, spacing: CIQSpacing.xxxs) {
-                    let lo = market.rawEstimatedValue * 0.95
-                    let hi = market.rawEstimatedValue * 1.05
-                    Text("\(lo.currencyFormatted)–\(hi.currencyFormatted)")
-                        .font(CIQFont.footnoteBold)
-                        .foregroundStyle(CIQColors.Fallback.textPrimary)
-                    PriceChangeLabel(percentageChange: market.thirtyDayChangePercentage)
-                    Text("\(market.salesVolume30Days) sales")
-                        .font(CIQFont.caption)
-                        .foregroundStyle(CIQColors.Fallback.textTertiary)
+                    if market.rawEstimatedValue > 0 {
+                        let lo = market.rawEstimatedValue * 0.95
+                        let hi = market.rawEstimatedValue * 1.05
+                        Text("\(lo.currencyFormatted)–\(hi.currencyFormatted)")
+                            .font(CIQFont.footnoteBold)
+                            .foregroundStyle(CIQColors.Fallback.textPrimary)
+                        PriceChangeLabel(percentageChange: market.thirtyDayChangePercentage)
+                    } else {
+                        Text("Price unavailable")
+                            .font(CIQFont.caption)
+                            .foregroundStyle(CIQColors.Fallback.textTertiary)
+                    }
+                    if market.salesVolume30Days > 0 {
+                        Text("\(market.salesVolume30Days) sales")
+                            .font(CIQFont.caption)
+                            .foregroundStyle(CIQColors.Fallback.textTertiary)
+                    }
                 }
             }
 
@@ -166,7 +183,7 @@ struct MarketCardRow: View {
         .padding(CIQSpacing.sm)
         .background(CIQColors.Fallback.backgroundCard)
         .clipShape(RoundedRectangle(cornerRadius: CIQRadius.sm))
-        .task { market = MockSeedData.marketSnapshot(for: card.id) }
+        .task { market = await MarketSnapshotCache.shared.snapshot(for: card.id) }
     }
 }
 
@@ -219,12 +236,15 @@ struct MarketDetailView: View {
             }
         }
         .task {
-            market = MockSeedData.marketSnapshot(for: card.id)
-            priceHistory = MockSeedData.priceHistory(for: card.id, range: selectedTimeRange)
+            let service = ServiceContainer.shared.marketData
+            market = await MarketSnapshotCache.shared.snapshot(for: card.id)
+            priceHistory = (try? await service.priceHistory(for: card.id, range: selectedTimeRange)) ?? []
             checkWatchlist()
         }
         .onChange(of: selectedTimeRange) { _, newRange in
-            priceHistory = MockSeedData.priceHistory(for: card.id, range: newRange)
+            Task {
+                priceHistory = (try? await ServiceContainer.shared.marketData.priceHistory(for: card.id, range: newRange)) ?? []
+            }
         }
         .sheet(isPresented: $showAddToCollection) {
             NavigationStack {
@@ -345,6 +365,11 @@ struct MarketDetailView: View {
                         }
                     }
                     .frame(height: 200)
+                } else {
+                    Text("No price history available")
+                        .font(CIQFont.footnote)
+                        .foregroundStyle(CIQColors.Fallback.textTertiary)
+                        .frame(maxWidth: .infinity, minHeight: 120, alignment: .center)
                 }
             }
         }
@@ -353,11 +378,17 @@ struct MarketDetailView: View {
     private func volumeSection(_ market: MarketSnapshot) -> some View {
         CIQCard {
             VStack(spacing: CIQSpacing.sm) {
-                CIQMetricRow("30-Day Volume", value: "\(market.salesVolume30Days) sales")
+                if market.salesVolume30Days > 0 {
+                    CIQMetricRow("30-Day Volume", value: "\(market.salesVolume30Days) sales")
+                }
                 CIQMetricRow("Liquidity", value: String(format: "%.0f%%", market.liquidityScore * 100))
                 CIQMetricRow("30D Change", value: market.thirtyDayChangePercentage.percentFormatted, valueColor: market.thirtyDayChangePercentage >= 0 ? CIQColors.Fallback.positive : CIQColors.Fallback.negative)
-                CIQMetricRow("90D Change", value: market.ninetyDayChangePercentage.percentFormatted, valueColor: market.ninetyDayChangePercentage >= 0 ? CIQColors.Fallback.positive : CIQColors.Fallback.negative)
-                CIQMetricRow("1Y Change", value: market.oneYearChangePercentage.percentFormatted, valueColor: market.oneYearChangePercentage >= 0 ? CIQColors.Fallback.positive : CIQColors.Fallback.negative)
+                if market.ninetyDayChangePercentage != 0 {
+                    CIQMetricRow("90D Change", value: market.ninetyDayChangePercentage.percentFormatted, valueColor: market.ninetyDayChangePercentage >= 0 ? CIQColors.Fallback.positive : CIQColors.Fallback.negative)
+                }
+                if market.oneYearChangePercentage != 0 {
+                    CIQMetricRow("1Y Change", value: market.oneYearChangePercentage.percentFormatted, valueColor: market.oneYearChangePercentage >= 0 ? CIQColors.Fallback.positive : CIQColors.Fallback.negative)
+                }
             }
         }
     }

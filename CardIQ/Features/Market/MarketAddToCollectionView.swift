@@ -15,14 +15,7 @@ struct MarketAddToCollectionView: View {
         Form {
             Section {
                 HStack(spacing: CIQSpacing.sm) {
-                    RoundedRectangle(cornerRadius: CIQRadius.xs)
-                        .fill(CIQColors.Fallback.backgroundTertiary)
-                        .frame(width: 44, height: 60)
-                        .overlay {
-                            Image(systemName: "sparkles")
-                                .font(CIQFont.caption)
-                                .foregroundStyle(CIQColors.Fallback.accentPrimary)
-                        }
+                    CardArtworkView(card: card, size: .small)
                     VStack(alignment: .leading, spacing: CIQSpacing.xxxs) {
                         Text(card.name)
                             .font(CIQFont.bodyBold)

@@ -16,9 +16,9 @@ final class ServiceContainer {
 
     init(
         auth: any AuthenticationService = MockAuthenticationService(),
-        cardIdentification: any CardIdentificationService = MockCardIdentificationService(),
+        cardIdentification: any CardIdentificationService = PokemonTCGCardIdentificationService(),
         cardGrading: any CardGradingService = MockCardGradingService(),
-        marketData: any MarketDataService = MockMarketDataService(),
+        marketData: any MarketDataService = MarketDataFactory.make(),
         imageQuality: any ImageQualityService = MockImageQualityService(),
         subscription: any SubscriptionService = MockSubscriptionService(),
         imageStorage: any ImageStorageService = MockImageStorageService(),
