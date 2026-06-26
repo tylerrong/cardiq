@@ -274,7 +274,7 @@ struct GradingOpportunityCard: View {
         .frame(width: 150)
         .task {
             report = MockSeedData.gradingReport(for: card.id)
-            market = MockSeedData.marketSnapshot(for: card.id)
+            market = await MarketSnapshotCache.shared.snapshot(for: card.id)
         }
     }
 

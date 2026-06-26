@@ -11,8 +11,10 @@ struct AddCardView: View {
     @State private var purchaseDate = Date()
     @State private var notes = ""
     @State private var quantity = 1
+    @State private var isSaving = false
+    @State private var searchTask: Task<Void, Never>?
 
-    private let service = MockCardIdentificationService()
+    private let service: any CardIdentificationService = ServiceContainer.shared.cardIdentification
 
     var body: some View {
         Form {
@@ -20,13 +22,19 @@ struct AddCardView: View {
                 TextField("Search by name, set, or number...", text: $searchText)
                     .autocorrectionDisabled()
                     .onChange(of: searchText) { _, query in
-                        Task {
+                        searchTask?.cancel()
+                        searchTask = Task {
+                            try? await Task.sleep(for: .milliseconds(300))
+                            if Task.isCancelled { return }
                             if query.count >= 2 {
                                 searchResults = (try? await service.search(query: query)) ?? []
                             } else if query.isEmpty {
                                 searchResults = await service.allCards()
                             }
                         }
+                    }
+                    .onChange(of: searchResults) { _, cards in
+                        CIQImageCache.shared.prefetchThumbnails(for: cards)
                     }
 
                 if let card = selectedCard {
@@ -57,6 +65,7 @@ struct AddCardView: View {
                             selectedCard = card
                         } label: {
                             HStack(spacing: CIQSpacing.sm) {
+                                CardArtworkView(card: card, size: .small)
                                 VStack(alignment: .leading, spacing: CIQSpacing.xxxs) {
                                     Text(card.name)
                                         .font(CIQFont.bodyBold)
@@ -105,7 +114,8 @@ struct AddCardView: View {
                     .foregroundStyle(CIQColors.Fallback.textSecondary)
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("Add") { saveCard() }
+                Button("Add") { Task { await saveCard() } }
+                    .disabled(isSaving)
                     .foregroundStyle(CIQColors.Fallback.accentPrimary)
                     .disabled(selectedCard == nil)
             }
@@ -115,8 +125,10 @@ struct AddCardView: View {
         }
     }
 
-    private func saveCard() {
-        guard let card = selectedCard else { return }
+    private func saveCard() async {
+        guard let card = selectedCard, !isSaving else { return }
+        isSaving = true
+        defer { isSaving = false }
 
         let item = CollectionItem(
             cardIdentity: card,
@@ -126,7 +138,7 @@ struct AddCardView: View {
             notes: notes.isEmpty ? nil : notes
         )
 
-        let market = MockSeedData.marketSnapshot(for: card.id)
+        let market = try? await ServiceContainer.shared.marketData.snapshot(for: card.id)
         item.marketSnapshot = market
 
         let report = MockSeedData.gradingReport(for: card.id)

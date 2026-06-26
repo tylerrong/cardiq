@@ -189,24 +189,27 @@ struct CardArtworkView: View {
 
     // MARK: - Card Content
 
+    /// pokemontcg.io serves a small (`.png`) and hi-res (`_hires.png`) image.
+    /// Use the small one for thumbnails — the hi-res is ~1-2MB and decoding dozens
+    /// of them for 60px cells is the main source of scroll lag.
+    private var resolvedImageURL: URL? {
+        guard let imageURL = card?.imageURL else { return nil }
+        let resolved: String
+        switch size {
+        case .small, .medium:
+            resolved = imageURL.replacingOccurrences(of: "_hires.png", with: ".png")
+        case .large, .hero:
+            resolved = imageURL
+        }
+        return URL(string: resolved)
+    }
+
     @ViewBuilder
     private var cardContent: some View {
-        if let imageURL = card?.imageURL, let url = URL(string: imageURL) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                case .failure:
-                    fallbackView
-                case .empty:
-                    loadingView
-                @unknown default:
-                    fallbackView
-                }
-            }
-        } else {
+        // Cached/prefetched images render instantly; the placeholder (card identity
+        // gradient + name) only shows briefly while an uncached image loads, or if
+        // the image is genuinely unavailable.
+        CIQCachedImage(url: resolvedImageURL) {
             fallbackView
         }
     }

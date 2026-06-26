@@ -52,7 +52,7 @@ struct CIQTabBar: View {
     @Binding var selectedTab: AppTab
     let onAskCardIQ: () -> Void
 
-    private let navTabs: [AppTab] = [.home, .scan, .collection, .profile]
+    private let navTabs: [AppTab] = [.home, .scan, .collection, .market, .profile]
 
     var body: some View {
         HStack(spacing: CIQSpacing.sm) {

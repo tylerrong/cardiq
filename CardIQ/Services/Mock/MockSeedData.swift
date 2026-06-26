@@ -2,90 +2,93 @@ import Foundation
 
 enum MockSeedData {
 
+    // Real, verified cards from the pokemontcg.io catalog (consistent ids, images,
+    // and live TCGplayer pricing). Replaced the prior hand-authored seed, which had
+    // fabricated ids/set pairings that don't exist in the catalog.
     static let cards: [CardIdentity] = [
         CardIdentity(
-            id: "sv4-227", category: .pokemon, name: "Charizard ex",
-            setName: "Obsidian Flames", setCode: "SV04", cardNumber: "227/197",
-            year: 2023, variant: "Special Art Rare", rarity: .specialArt,
-            language: "en", isFirstEdition: false, isHolo: true, isReverseHolo: false,
-            imageURL: nil, identificationConfidence: 0.97
-        ),
-        CardIdentity(
-            id: "sv3pt5-207", category: .pokemon, name: "Umbreon ex",
-            setName: "151", setCode: "SV3.5", cardNumber: "207/165",
-            year: 2023, variant: "Special Illustration Rare", rarity: .specialIllustrationRare,
-            language: "en", isFirstEdition: false, isHolo: true, isReverseHolo: false,
-            imageURL: nil, identificationConfidence: 0.95
-        ),
-        CardIdentity(
-            id: "sv1-254", category: .pokemon, name: "Miraidon ex",
-            setName: "Scarlet & Violet", setCode: "SV01", cardNumber: "254/198",
-            year: 2023, variant: "Special Art Rare", rarity: .specialArt,
-            language: "en", isFirstEdition: false, isHolo: true, isReverseHolo: false,
-            imageURL: nil, identificationConfidence: 0.94
-        ),
-        CardIdentity(
-            id: "sv6-230", category: .pokemon, name: "Pikachu ex",
-            setName: "Twilight Masquerade", setCode: "SV06", cardNumber: "230/167",
+            id: "sv6-216", category: .pokemon, name: "Bloodmoon Ursaluna ex",
+            setName: "Twilight Masquerade", setCode: "TWM", cardNumber: "216/167",
             year: 2024, variant: "Special Illustration Rare", rarity: .specialIllustrationRare,
             language: "en", isFirstEdition: false, isHolo: true, isReverseHolo: false,
-            imageURL: nil, identificationConfidence: 0.96
+            imageURL: "https://images.pokemontcg.io/sv6/216_hires.png", identificationConfidence: 0.97
         ),
         CardIdentity(
-            id: "sv3-197", category: .pokemon, name: "Mew ex",
-            setName: "Obsidian Flames", setCode: "SV04", cardNumber: "197/197",
-            year: 2023, variant: "Full Art", rarity: .fullArt,
+            id: "sv6-220", category: .pokemon, name: "Perrin",
+            setName: "Twilight Masquerade", setCode: "TWM", cardNumber: "220/167",
+            year: 2024, variant: "Special Illustration Rare", rarity: .specialIllustrationRare,
             language: "en", isFirstEdition: false, isHolo: true, isReverseHolo: false,
-            imageURL: nil, identificationConfidence: 0.93
+            imageURL: "https://images.pokemontcg.io/sv6/220_hires.png", identificationConfidence: 0.96
         ),
         CardIdentity(
-            id: "sv2-191", category: .pokemon, name: "Gardevoir ex",
-            setName: "Paldea Evolved", setCode: "SV02", cardNumber: "191/193",
-            year: 2023, variant: "Full Art", rarity: .fullArt,
+            id: "sv7-170", category: .pokemon, name: "Terapagos ex",
+            setName: "Stellar Crown", setCode: "SCR", cardNumber: "170/142",
+            year: 2024, variant: "Special Illustration Rare", rarity: .specialIllustrationRare,
             language: "en", isFirstEdition: false, isHolo: true, isReverseHolo: false,
-            imageURL: nil, identificationConfidence: 0.92
+            imageURL: "https://images.pokemontcg.io/sv7/170_hires.png", identificationConfidence: 0.95
         ),
         CardIdentity(
-            id: "sv5-208", category: .pokemon, name: "Eevee",
-            setName: "Temporal Forces", setCode: "SV05", cardNumber: "208/162",
-            year: 2024, variant: "Illustration Rare", rarity: .illustrationRare,
+            id: "sv7-169", category: .pokemon, name: "Dachsbun ex",
+            setName: "Stellar Crown", setCode: "SCR", cardNumber: "169/142",
+            year: 2024, variant: "Special Illustration Rare", rarity: .specialIllustrationRare,
             language: "en", isFirstEdition: false, isHolo: true, isReverseHolo: false,
-            imageURL: nil, identificationConfidence: 0.91
+            imageURL: "https://images.pokemontcg.io/sv7/169_hires.png", identificationConfidence: 0.95
         ),
         CardIdentity(
-            id: "sv1-198", category: .pokemon, name: "Koraidon ex",
-            setName: "Scarlet & Violet", setCode: "SV01", cardNumber: "198/198",
-            year: 2023, variant: "Ultra Rare", rarity: .ultraRare,
+            id: "sv6-217", category: .pokemon, name: "Carmine",
+            setName: "Twilight Masquerade", setCode: "TWM", cardNumber: "217/167",
+            year: 2024, variant: "Special Illustration Rare", rarity: .specialIllustrationRare,
             language: "en", isFirstEdition: false, isHolo: true, isReverseHolo: false,
-            imageURL: nil, identificationConfidence: 0.95
+            imageURL: "https://images.pokemontcg.io/sv6/217_hires.png", identificationConfidence: 0.94
         ),
         CardIdentity(
-            id: "sv6pt5-175", category: .pokemon, name: "Mewtwo ex",
-            setName: "Shrouded Fable", setCode: "SV6.5", cardNumber: "175/064",
-            year: 2024, variant: "Special Art Rare", rarity: .specialArt,
+            id: "sv6-215", category: .pokemon, name: "Cornerstone Mask Ogerpon ex",
+            setName: "Twilight Masquerade", setCode: "TWM", cardNumber: "215/167",
+            year: 2024, variant: "Special Illustration Rare", rarity: .specialIllustrationRare,
             language: "en", isFirstEdition: false, isHolo: true, isReverseHolo: false,
-            imageURL: nil, identificationConfidence: 0.96
+            imageURL: "https://images.pokemontcg.io/sv6/215_hires.png", identificationConfidence: 0.94
         ),
         CardIdentity(
-            id: "sv4-rh-025", category: .pokemon, name: "Charmander",
-            setName: "Obsidian Flames", setCode: "SV04", cardNumber: "025/197",
-            year: 2023, variant: nil, rarity: .reverseHolo,
-            language: "en", isFirstEdition: false, isHolo: false, isReverseHolo: true,
-            imageURL: nil, identificationConfidence: 0.98
-        ),
-        CardIdentity(
-            id: "sv3pt5-001", category: .pokemon, name: "Bulbasaur",
-            setName: "151", setCode: "SV3.5", cardNumber: "001/165",
-            year: 2023, variant: nil, rarity: .common,
-            language: "en", isFirstEdition: false, isHolo: false, isReverseHolo: false,
-            imageURL: nil, identificationConfidence: 0.99
-        ),
-        CardIdentity(
-            id: "sv7-243", category: .pokemon, name: "Rayquaza ex",
-            setName: "Stellar Crown", setCode: "SV07", cardNumber: "243/175",
-            year: 2024, variant: "Hyper Rare", rarity: .hyperRare,
+            id: "sv6-219", category: .pokemon, name: "Lana's Aid",
+            setName: "Twilight Masquerade", setCode: "TWM", cardNumber: "219/167",
+            year: 2024, variant: "Special Illustration Rare", rarity: .specialIllustrationRare,
             language: "en", isFirstEdition: false, isHolo: true, isReverseHolo: false,
-            imageURL: nil, identificationConfidence: 0.94
+            imageURL: "https://images.pokemontcg.io/sv6/219_hires.png", identificationConfidence: 0.93
+        ),
+        CardIdentity(
+            id: "sv7-167", category: .pokemon, name: "Hydrapple ex",
+            setName: "Stellar Crown", setCode: "SCR", cardNumber: "167/142",
+            year: 2024, variant: "Special Illustration Rare", rarity: .specialIllustrationRare,
+            language: "en", isFirstEdition: false, isHolo: true, isReverseHolo: false,
+            imageURL: "https://images.pokemontcg.io/sv7/167_hires.png", identificationConfidence: 0.93
+        ),
+        CardIdentity(
+            id: "sv6-218", category: .pokemon, name: "Kieran",
+            setName: "Twilight Masquerade", setCode: "TWM", cardNumber: "218/167",
+            year: 2024, variant: "Special Illustration Rare", rarity: .specialIllustrationRare,
+            language: "en", isFirstEdition: false, isHolo: true, isReverseHolo: false,
+            imageURL: "https://images.pokemontcg.io/sv6/218_hires.png", identificationConfidence: 0.92
+        ),
+        CardIdentity(
+            id: "sv7-168", category: .pokemon, name: "Galvantula ex",
+            setName: "Stellar Crown", setCode: "SCR", cardNumber: "168/142",
+            year: 2024, variant: "Special Illustration Rare", rarity: .specialIllustrationRare,
+            language: "en", isFirstEdition: false, isHolo: true, isReverseHolo: false,
+            imageURL: "https://images.pokemontcg.io/sv7/168_hires.png", identificationConfidence: 0.92
+        ),
+        CardIdentity(
+            id: "sv7-172", category: .pokemon, name: "Lacey",
+            setName: "Stellar Crown", setCode: "SCR", cardNumber: "172/142",
+            year: 2024, variant: "Special Illustration Rare", rarity: .specialIllustrationRare,
+            language: "en", isFirstEdition: false, isHolo: true, isReverseHolo: false,
+            imageURL: "https://images.pokemontcg.io/sv7/172_hires.png", identificationConfidence: 0.91
+        ),
+        CardIdentity(
+            id: "sv7-171", category: .pokemon, name: "Briar",
+            setName: "Stellar Crown", setCode: "SCR", cardNumber: "171/142",
+            year: 2024, variant: "Special Illustration Rare", rarity: .specialIllustrationRare,
+            language: "en", isFirstEdition: false, isHolo: true, isReverseHolo: false,
+            imageURL: "https://images.pokemontcg.io/sv7/171_hires.png", identificationConfidence: 0.90
         ),
     ]
 

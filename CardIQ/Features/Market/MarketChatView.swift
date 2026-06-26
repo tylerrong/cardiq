@@ -297,9 +297,13 @@ struct ChatBubble: View {
             HStack(spacing: CIQSpacing.xs) {
                 ForEach(cards) { card in
                     HStack(spacing: CIQSpacing.xxs) {
-                        Image(systemName: "rectangle.portrait")
-                            .font(.system(size: 10))
-                            .foregroundStyle(CIQColors.Fallback.accentPrimary)
+                        AsyncImage(url: card.imageURL.flatMap { URL(string: $0) }) { image in
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            Color.clear
+                        }
+                        .frame(width: 16, height: 22)
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
                         Text(card.name)
                             .font(CIQFont.caption)
                             .foregroundStyle(CIQColors.Fallback.textSecondary)

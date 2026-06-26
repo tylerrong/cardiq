@@ -126,9 +126,11 @@ struct CollectionView: View {
             }
             .task {
                 if !hasSeedLoaded && items.isEmpty {
-                    seedCollection()
+                    await seedCollection()
                     hasSeedLoaded = true
                 }
+                CIQImageCache.shared.prefetchThumbnails(for: items.compactMap(\.cardIdentity))
+                await refreshPrices()
             }
         }
     }
@@ -234,15 +236,16 @@ struct CollectionView: View {
         }
     }
 
-    private func seedCollection() {
+    private func seedCollection() async {
         for sample in MockSeedData.sampleCollectionItems {
             let item = CollectionItem(
                 cardIdentity: sample.card,
                 purchasePrice: sample.purchase,
                 purchaseDate: Date().addingTimeInterval(-Double.random(in: 86400...2592000))
             )
-            let market = MockSeedData.marketSnapshot(for: sample.card.id)
-            item.marketSnapshot = market
+            item.marketSnapshot =
+                await MarketSnapshotCache.shared.snapshot(for: sample.card.id)
+                ?? MockSeedData.marketSnapshot(for: sample.card.id)
             if let grade = sample.grade {
                 item.officialGrade = grade
                 item.officialGradingCompany = sample.gradeCompany
@@ -251,6 +254,20 @@ struct CollectionView: View {
             modelContext.insert(item)
         }
         try? modelContext.save()
+    }
+
+    /// Refresh stored prices with live data so Current Value / P&L reflect the
+    /// real market, not the mock snapshot baked in at seed time.
+    private func refreshPrices() async {
+        var changed = false
+        for item in items {
+            guard let id = item.cardIdentity?.id else { continue }
+            if let snapshot = await MarketSnapshotCache.shared.snapshot(for: id) {
+                item.marketSnapshot = snapshot
+                changed = true
+            }
+        }
+        if changed { try? modelContext.save() }
     }
 }
 
