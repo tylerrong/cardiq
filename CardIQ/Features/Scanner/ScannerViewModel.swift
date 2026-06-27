@@ -6,7 +6,8 @@ import PhotosUI
 @Observable
 @MainActor
 final class ScannerViewModel {
-    var currentStep: ScannerStep = .frontCapture
+    var currentStep: ScannerStep = .instructions
+    var scanMode: ScanMode = .frontAndBack
     var frontImage: Data?
     var backImage: Data?
     var surfaceImage: Data?
@@ -27,6 +28,12 @@ final class ScannerViewModel {
         self.services = services
     }
 
+    /// Entry point from the instructions screen — locks in the chosen mode.
+    func start(mode: ScanMode) {
+        scanMode = mode
+        currentStep = .frontCapture
+    }
+
     func capturedFront(_ imageData: Data) {
         frontImage = imageData
         currentStep = .frontReview
@@ -37,7 +44,7 @@ final class ScannerViewModel {
         do {
             frontQuality = try await services.imageQuality.assess(image: data, captureType: .front)
             if frontQuality?.passesMinimumQuality == true {
-                currentStep = .optionalSurfaceCapture
+                advanceAfterFront()
             }
         } catch {
             self.error = .poorImageQuality("Could not assess image quality.")
@@ -45,7 +52,16 @@ final class ScannerViewModel {
     }
 
     func acceptFrontWithWarnings() {
-        currentStep = .optionalSurfaceCapture
+        advanceAfterFront()
+    }
+
+    /// Front-only jumps straight to analysis; front+back continues to the back capture.
+    private func advanceAfterFront() {
+        if scanMode.includesGrading {
+            currentStep = .backCapture
+        } else {
+            startProcessing()
+        }
     }
 
     func retakeFront() {
@@ -99,7 +115,7 @@ final class ScannerViewModel {
             }
             currentStep = .processing
             isProcessing = true
-            processingSteps = ProcessingStep.allSteps
+            processingSteps = ProcessingStep.steps(for: scanMode)
             await runAnalysis()
         }
     }
@@ -149,13 +165,15 @@ final class ScannerViewModel {
                 throw CIQError.poorImageQuality("Missing card image.")
             }
 
-            let report = try await services.cardGrading.analyze(
-                cardId: card.id,
-                frontImage: frontData,
-                backImage: backImage ?? frontData,
-                surfaceImage: surfaceImage
-            )
-            gradingReport = report
+            // Grading confidence requires the back; front-only stops at value.
+            if scanMode.includesGrading {
+                gradingReport = try await services.cardGrading.analyze(
+                    cardId: card.id,
+                    frontImage: frontData,
+                    backImage: backImage ?? frontData,
+                    surfaceImage: surfaceImage
+                )
+            }
 
             let market = try await services.marketData.snapshot(for: card.id)
             marketSnapshot = market
@@ -173,6 +191,16 @@ final class ScannerViewModel {
             isProcessing = false
             currentStep = .error
         }
+    }
+
+    /// From a front-only result: keep the front shot, capture the back, and run grading.
+    func upgradeToFullScan() {
+        scanMode = .frontAndBack
+        gradingReport = nil
+        backImage = nil
+        backQuality = nil
+        surfaceImage = nil
+        currentStep = .backCapture
     }
 
     func retry() {
@@ -214,4 +242,15 @@ struct ProcessingStep: Identifiable {
         .init(id: "market", label: "Finding market sales", icon: "chart.bar", status: .pending),
         .init(id: "roi", label: "Calculating grading ROI", icon: "dollarsign.circle", status: .pending),
     ]
+
+    /// Front-only skips the grading inspection steps — it only identifies and prices the card.
+    static let frontOnlySteps: [ProcessingStep] = [
+        .init(id: "quality", label: "Checking image quality", icon: "photo.badge.checkmark", status: .active),
+        .init(id: "identify", label: "Identifying card", icon: "magnifyingglass", status: .pending),
+        .init(id: "market", label: "Finding market sales", icon: "chart.bar", status: .pending),
+    ]
+
+    static func steps(for mode: ScanMode) -> [ProcessingStep] {
+        mode.includesGrading ? allSteps : frontOnlySteps
+    }
 }
