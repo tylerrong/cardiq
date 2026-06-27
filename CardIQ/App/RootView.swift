@@ -4,10 +4,29 @@ struct RootView: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        if appState.hasCompletedOnboarding {
-            MainTabView()
-        } else {
-            OnboardingView()
+        Group {
+            if appState.requiresAuthentication && !appState.authResolved {
+                AuthLoadingView()
+            } else if appState.requiresAuthentication && !appState.isAuthenticated {
+                LoginView()
+            } else if appState.hasCompletedOnboarding {
+                MainTabView()
+            } else {
+                OnboardingView()
+            }
+        }
+        .task { await appState.bootstrapAuth() }
+    }
+}
+
+/// Brief splash shown while the launch-time Supabase session lookup runs.
+struct AuthLoadingView: View {
+    var body: some View {
+        ZStack {
+            CIQColors.Fallback.backgroundPrimary.ignoresSafeArea()
+            ProgressView()
+                .controlSize(.large)
+                .tint(CIQColors.Fallback.accentPrimary)
         }
     }
 }

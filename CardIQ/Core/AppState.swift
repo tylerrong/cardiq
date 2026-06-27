@@ -14,7 +14,16 @@ final class AppState {
         set { UserDefaults.standard.set(newValue?.rawValue, forKey: "collectorType") }
     }
 
-    var isAuthenticated: Bool = true
+    /// Whether the app requires a real sign-in. Only true once Supabase is
+    /// configured; without credentials the app runs on mocks as before.
+    var requiresAuthentication: Bool { SupabaseManager.isConfigured }
+
+    /// In mock mode we're "authenticated" immediately; with Supabase we wait for
+    /// the session check before deciding.
+    var isAuthenticated: Bool = !SupabaseManager.isConfigured
+    /// Set once the launch-time session lookup has finished (avoids flashing the
+    /// sign-in screen before we know whether a session exists).
+    var authResolved: Bool = false
     var currentUser: AppUser = .free
     var selectedTab: AppTab = .home
     var showScanner: Bool = false
@@ -43,6 +52,40 @@ final class AppState {
         UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
         UserDefaults.standard.removeObject(forKey: "collectorType")
         hasCompletedOnboarding = false
+    }
+
+    // MARK: - Authentication
+
+    /// Resolves the current session at launch. In mock mode this is a no-op that
+    /// marks the user authenticated; with Supabase it restores an existing session.
+    func bootstrapAuth() async {
+        guard requiresAuthentication else {
+            isAuthenticated = true
+            authResolved = true
+            return
+        }
+        if let user = await ServiceContainer.shared.auth.currentUser() {
+            currentUser = user
+            isAuthenticated = true
+        }
+        authResolved = true
+    }
+
+    func didSignIn(_ user: AppUser) {
+        currentUser = user
+        isAuthenticated = true
+    }
+
+    func signOut() async {
+        try? await ServiceContainer.shared.auth.signOut()
+        currentUser = .free
+        isAuthenticated = false
+    }
+
+    func deleteAccount() async {
+        try? await ServiceContainer.shared.auth.deleteAccount()
+        currentUser = .free
+        isAuthenticated = false
     }
 }
 

@@ -26,7 +26,7 @@ struct ProfileView: View {
             .ciqNavigationBarStyle()
             .sheet(isPresented: $showPaywall) { PaywallView() }
             .alert("Delete Account", isPresented: $showDeleteConfirmation) {
-                Button("Delete", role: .destructive) {}
+                Button("Delete", role: .destructive) { Task { await appState.deleteAccount() } }
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("This will permanently delete your account and all collection data. This cannot be undone.")
@@ -145,10 +145,10 @@ struct ProfileView: View {
 
     private var dangerSection: some View {
         Section {
-            Button("Sign Out") {
-                appState.resetOnboarding()
+            if appState.requiresAuthentication {
+                Button("Sign Out") { Task { await appState.signOut() } }
+                    .foregroundStyle(CIQColors.Fallback.textSecondary)
             }
-            .foregroundStyle(CIQColors.Fallback.textSecondary)
             Button("Delete Account") { showDeleteConfirmation = true }
                 .foregroundStyle(CIQColors.Fallback.negative)
             #if DEBUG

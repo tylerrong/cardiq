@@ -13,18 +13,20 @@ final class ServiceContainer {
     let analytics: any AnalyticsService
     let roiCalculator: any GradeROICalculator
     let marketChat: any MarketChatService
+    let collectionRepository: any CollectionRepository
 
     init(
-        auth: any AuthenticationService = MockAuthenticationService(),
+        auth: any AuthenticationService = SupabaseManager.makeAuth(),
         cardIdentification: any CardIdentificationService = PokemonTCGCardIdentificationService(),
         cardGrading: any CardGradingService = MockCardGradingService(),
         marketData: any MarketDataService = MarketDataFactory.make(),
         imageQuality: any ImageQualityService = MockImageQualityService(),
         subscription: any SubscriptionService = MockSubscriptionService(),
-        imageStorage: any ImageStorageService = MockImageStorageService(),
+        imageStorage: any ImageStorageService = SupabaseManager.makeImageStorage(),
         analytics: any AnalyticsService = MockAnalyticsService(),
         roiCalculator: any GradeROICalculator = DefaultGradeROICalculator(),
-        marketChat: any MarketChatService = MockMarketChatService()
+        marketChat: any MarketChatService = MockMarketChatService(),
+        collectionRepository: any CollectionRepository = SupabaseManager.makeCollectionRepository()
     ) {
         self.auth = auth
         self.cardIdentification = cardIdentification
@@ -36,5 +38,6 @@ final class ServiceContainer {
         self.analytics = analytics
         self.roiCalculator = roiCalculator
         self.marketChat = marketChat
+        self.collectionRepository = collectionRepository
     }
 }

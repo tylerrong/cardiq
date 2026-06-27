@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Template for Supabase credentials.
+
+  Setup:
+    1. cp Supabase-Info.example.plist CardIQ/Supabase-Info.plist
+    2. Fill in the two values below from your Supabase project
+       (Dashboard > Project Settings > API).
+    3. Make sure CardIQ/Supabase-Info.plist is a member of the CardIQ target
+       (it is auto-included via the synchronized folder).
+
+  The real CardIQ/Supabase-Info.plist is gitignored. Until it exists with real
+  values, the app falls back to mock services and runs exactly as before.
+-->
+<plist version="1.0">
+<dict>
+	<key>SUPABASE_URL</key>
+	<string>YOUR_SUPABASE_PROJECT_URL</string>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>YOUR_SUPABASE_ANON_KEY</string>
+</dict>
+</plist>
