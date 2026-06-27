@@ -13,3 +13,7 @@ DerivedData/
 ## OS files
 .DS_Store
 .claude/
+
+## Supabase secrets (copy Supabase-Info.example.plist -> CardIQ/Supabase-Info.plist)
+CardIQ/Supabase-Info.plist
+Supabase-Info.plist

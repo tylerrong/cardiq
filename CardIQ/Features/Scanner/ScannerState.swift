@@ -1,5 +1,38 @@
 import Foundation
 
+/// What the user chose to scan. Drives how far the flow goes and which
+/// results are produced.
+enum ScanMode: String, Sendable {
+    /// Front image only — identifies the card and its raw market value.
+    case frontOnly
+    /// Front + back — adds AI grading confidence on top of identification and value.
+    case frontAndBack
+
+    var title: String {
+        switch self {
+        case .frontOnly: "Front Only"
+        case .frontAndBack: "Front & Back"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .frontOnly: "Identify the card and its market price"
+        case .frontAndBack: "Adds AI grading confidence"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .frontOnly: "rectangle.portrait"
+        case .frontAndBack: "rectangle.portrait.on.rectangle.portrait"
+        }
+    }
+
+    /// Whether this mode runs the grading analysis (corners, edges, surface, grade).
+    var includesGrading: Bool { self == .frontAndBack }
+}
+
 enum ScannerStep: Int, CaseIterable, Sendable {
     case instructions
     case frontCapture
@@ -42,18 +75,35 @@ enum ScannerStep: Int, CaseIterable, Sendable {
         }
     }
 
-    var progress: Double {
-        switch self {
-        case .instructions: 0
-        case .frontCapture: 0.15
-        case .frontReview: 0.30
-        case .backCapture: 0.45
-        case .backReview: 0.60
-        case .optionalSurfaceCapture: 0.70
-        case .processing: 0.80
-        case .identificationConfirmation: 0.90
-        case .complete: 1.0
-        case .error: 0
+    /// Progress fraction for the bar, scaled to the active mode so front-only
+    /// fills smoothly across its shorter flow instead of jumping.
+    func progress(for mode: ScanMode) -> Double {
+        switch mode {
+        case .frontAndBack:
+            switch self {
+            case .instructions: 0
+            case .frontCapture: 0.15
+            case .frontReview: 0.30
+            case .backCapture: 0.45
+            case .backReview: 0.60
+            case .optionalSurfaceCapture: 0.70
+            case .processing: 0.80
+            case .identificationConfirmation: 0.90
+            case .complete: 1.0
+            case .error: 0
+            }
+        case .frontOnly:
+            // No back/surface steps in this flow.
+            switch self {
+            case .instructions: 0
+            case .frontCapture: 0.2
+            case .frontReview: 0.4
+            case .processing: 0.65
+            case .identificationConfirmation: 0.85
+            case .complete: 1.0
+            case .backCapture, .backReview, .optionalSurfaceCapture: 0.4
+            case .error: 0
+            }
         }
     }
 }

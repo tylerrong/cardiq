@@ -23,7 +23,7 @@ struct ScannerFlowView: View {
                     Group {
                         switch viewModel.currentStep {
                         case .instructions:
-                            InstructionsView(onStart: { viewModel.currentStep = .frontCapture })
+                            InstructionsView(onStart: { viewModel.start(mode: $0) })
                         case .frontCapture:
                             CaptureView(
                                 title: "Front of Card",
@@ -71,9 +71,17 @@ struct ScannerFlowView: View {
                             )
                         case .complete:
                             if let card = viewModel.selectedCard,
-                               let report = viewModel.gradingReport,
                                let market = viewModel.marketSnapshot {
-                                GradeReportView(card: card, report: report, market: market, onDismiss: { dismiss() })
+                                if let report = viewModel.gradingReport {
+                                    GradeReportView(card: card, report: report, market: market, onDismiss: { dismiss() })
+                                } else {
+                                    RawValueResultView(
+                                        card: card,
+                                        market: market,
+                                        onScanBack: { viewModel.upgradeToFullScan() },
+                                        onDismiss: { dismiss() }
+                                    )
+                                }
                             }
                         case .error:
                             if let error = viewModel.error {
@@ -101,7 +109,7 @@ struct ScannerFlowView: View {
 
     private var scannerProgress: some View {
         VStack(spacing: CIQSpacing.xs) {
-            CIQProgressBar(value: viewModel.currentStep.progress, height: 4)
+            CIQProgressBar(value: viewModel.currentStep.progress(for: viewModel.scanMode), height: 4)
             Text(viewModel.currentStep.title)
                 .font(CIQFont.footnoteBold)
                 .foregroundStyle(CIQColors.Fallback.textSecondary)
@@ -112,16 +120,16 @@ struct ScannerFlowView: View {
 }
 
 struct InstructionsView: View {
-    let onStart: () -> Void
+    let onStart: (ScanMode) -> Void
 
     var body: some View {
-        VStack(spacing: CIQSpacing.xxl) {
-            Spacer()
+        VStack(spacing: CIQSpacing.lg) {
+            Spacer(minLength: 0)
             Image(systemName: "viewfinder")
-                .font(.system(size: 72, weight: .light))
+                .font(.system(size: 56, weight: .light))
                 .foregroundStyle(CIQColors.Fallback.accentPrimary)
 
-            VStack(spacing: CIQSpacing.sm) {
+            VStack(spacing: CIQSpacing.xs) {
                 Text("Scan Your Card")
                     .font(CIQFont.displayMedium)
                     .foregroundStyle(CIQColors.Fallback.textPrimary)
@@ -131,7 +139,7 @@ struct InstructionsView: View {
                     .foregroundStyle(CIQColors.Fallback.textSecondary)
             }
 
-            VStack(alignment: .leading, spacing: CIQSpacing.md) {
+            VStack(alignment: .leading, spacing: CIQSpacing.sm) {
                 InstructionRow(icon: "light.max", text: "Use even, indirect lighting")
                 InstructionRow(icon: "rectangle.portrait", text: "Remove the card from its sleeve")
                 InstructionRow(icon: "circle.fill", text: "Place on a dark, flat surface")
@@ -139,12 +147,73 @@ struct InstructionsView: View {
                 InstructionRow(icon: "arrow.up.left.and.arrow.down.right", text: "Fill the frame with the card")
             }
 
-            Spacer()
+            Spacer(minLength: 0)
 
-            CIQPrimaryButton("Start Scanning", icon: "camera.fill", action: onStart)
-                .padding(.horizontal, CIQSpacing.xl)
-                .padding(.bottom, CIQSpacing.xxxl)
+            VStack(spacing: CIQSpacing.sm) {
+                Text("What do you want to scan?")
+                    .font(CIQFont.footnoteBold)
+                    .foregroundStyle(CIQColors.Fallback.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                ScanModeOption(mode: .frontOnly, isRecommended: false, action: { onStart(.frontOnly) })
+                ScanModeOption(mode: .frontAndBack, isRecommended: true, action: { onStart(.frontAndBack) })
+            }
+            .padding(.horizontal, CIQSpacing.xl)
+            .padding(.bottom, CIQSpacing.xxxl)
         }
+    }
+}
+
+/// A tappable card representing one scan mode, shown at the bottom of the instructions screen.
+struct ScanModeOption: View {
+    let mode: ScanMode
+    let isRecommended: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            CIQHaptics.tap()
+            action()
+        } label: {
+            HStack(spacing: CIQSpacing.md) {
+                Image(systemName: mode.icon)
+                    .font(.system(size: 24, weight: .regular))
+                    .foregroundStyle(CIQColors.Fallback.accentPrimary)
+                    .frame(width: 36)
+
+                VStack(alignment: .leading, spacing: CIQSpacing.xxxs) {
+                    HStack(spacing: CIQSpacing.xs) {
+                        Text(mode.title)
+                            .font(CIQFont.bodyBold)
+                            .foregroundStyle(CIQColors.Fallback.textPrimary)
+                        if isRecommended {
+                            CIQBadge(text: "Full Report", color: CIQColors.Fallback.accentPrimary)
+                        }
+                    }
+                    Text(mode.subtitle)
+                        .font(CIQFont.footnote)
+                        .foregroundStyle(CIQColors.Fallback.textSecondary)
+                        .multilineTextAlignment(.leading)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(CIQFont.caption)
+                    .foregroundStyle(CIQColors.Fallback.textTertiary)
+            }
+            .padding(CIQSpacing.md)
+            .background(CIQColors.Fallback.backgroundCard)
+            .clipShape(RoundedRectangle(cornerRadius: CIQRadius.card))
+            .overlay {
+                RoundedRectangle(cornerRadius: CIQRadius.card)
+                    .strokeBorder(
+                        isRecommended ? CIQColors.Fallback.accentPrimary.opacity(0.5) : CIQColors.Fallback.borderSubtle,
+                        lineWidth: 1
+                    )
+            }
+        }
+        .accessibilityLabel("\(mode.title). \(mode.subtitle)")
     }
 }
 
@@ -175,7 +244,38 @@ struct CaptureView: View {
     @State private var selectedPhoto: PhotosPickerItem?
     #if canImport(UIKit)
     @StateObject private var camera = CardCameraController()
+
+    private var detectionColor: Color {
+        switch camera.detection {
+        case .searching: return CIQColors.Fallback.borderSubtle
+        case .adjusting: return CIQColors.Fallback.warning
+        case .ready: return CIQColors.Fallback.positive
+        }
+    }
+    private var detectionText: String {
+        switch camera.detection {
+        case .searching: return "Point at a card"
+        case .adjusting: return "Move closer and center the card"
+        case .ready: return "Looks good — tap to capture"
+        }
+    }
     #endif
+
+    private var flashIcon: String {
+        #if canImport(UIKit)
+        camera.torchOn ? "bolt.fill" : "bolt.slash.fill"
+        #else
+        "bolt.slash.fill"
+        #endif
+    }
+
+    private var flashTint: Color {
+        #if canImport(UIKit)
+        camera.torchOn ? CIQColors.Fallback.accentPrimary : CIQColors.Fallback.textSecondary
+        #else
+        CIQColors.Fallback.textSecondary
+        #endif
+    }
 
     var body: some View {
         ZStack {
@@ -192,6 +292,13 @@ struct CaptureView: View {
             }
             .frame(width: 260, height: 364)
             .clipShape(RoundedRectangle(cornerRadius: CIQRadius.lg))
+            .overlay {
+                #if canImport(UIKit)
+                RoundedRectangle(cornerRadius: CIQRadius.lg)
+                    .strokeBorder(detectionColor, lineWidth: 3)
+                    .animation(.easeInOut(duration: 0.2), value: camera.detection)
+                #endif
+            }
             .accessibilityLabel("Card camera preview")
 
             Text(instruction)
@@ -200,10 +307,9 @@ struct CaptureView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, CIQSpacing.xxl)
 
-            HStack(spacing: CIQSpacing.xs) {
-                CIQBadge(text: "Lighting: Good", color: CIQColors.Fallback.positive)
-                CIQBadge(text: "Stable", color: CIQColors.Fallback.positive)
-            }
+            #if canImport(UIKit)
+            CIQBadge(text: detectionText, color: detectionColor)
+            #endif
 
             Spacer()
 
@@ -229,10 +335,7 @@ struct CaptureView: View {
                     CIQHaptics.tap()
                     showFlash = true
                     #if canImport(UIKit)
-                    camera.capture { data in
-                        showFlash = false
-                        onCapture(data)
-                    }
+                    camera.capture()
                     #endif
                 } label: {
                     Circle()
@@ -247,15 +350,20 @@ struct CaptureView: View {
                 .accessibilityLabel("Take photo")
 
                 Button {
+                    CIQHaptics.tap()
+                    #if canImport(UIKit)
+                    camera.toggleTorch()
+                    #endif
                 } label: {
                     VStack(spacing: CIQSpacing.xxs) {
-                        Image(systemName: "bolt.slash.fill")
+                        Image(systemName: flashIcon)
                             .font(.system(size: 24))
                         Text("Flash")
                             .font(CIQFont.caption)
                     }
-                    .foregroundStyle(CIQColors.Fallback.textSecondary)
+                    .foregroundStyle(flashTint)
                 }
+                .accessibilityLabel("Toggle flash")
             }
             .padding(.bottom, CIQSpacing.xxxl)
         }
@@ -268,7 +376,13 @@ struct CaptureView: View {
         }
         }
         #if canImport(UIKit)
-        .onAppear { camera.start() }
+        .onAppear {
+            camera.onCapture = { data in
+                showFlash = false
+                onCapture(data)
+            }
+            camera.start()
+        }
         .onDisappear { camera.stop() }
         #endif
     }

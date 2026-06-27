@@ -3,6 +3,8 @@ import SwiftUI
 
 protocol AuthenticationService {
     func signInWithApple() async throws -> AppUser
+    func signIn(email: String, password: String) async throws -> AppUser
+    func signUp(email: String, password: String) async throws -> AppUser
     func signOut() async throws
     func currentUser() async -> AppUser?
     func deleteAccount() async throws

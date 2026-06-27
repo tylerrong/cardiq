@@ -19,6 +19,17 @@ final class MockAuthenticationService: AuthenticationService {
         return u
     }
 
+    func signIn(email: String, password: String) async throws -> AppUser {
+        var u = AppUser.free
+        u.email = email
+        user = u
+        return u
+    }
+
+    func signUp(email: String, password: String) async throws -> AppUser {
+        try await signIn(email: email, password: password)
+    }
+
     func signOut() async throws {
         user = nil
     }
