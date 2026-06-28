@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         Group {
@@ -16,6 +17,13 @@ struct RootView: View {
             }
         }
         .task { await appState.bootstrapAuth() }
+        .task(id: appState.isAuthenticated) {
+            // Pull the cloud collection once a session is active (launch restore
+            // or fresh sign-in). No-ops when Supabase isn't configured.
+            if appState.isAuthenticated {
+                await CollectionSync.pull(into: modelContext)
+            }
+        }
     }
 }
 

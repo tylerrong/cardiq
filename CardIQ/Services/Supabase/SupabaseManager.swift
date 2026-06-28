@@ -30,9 +30,19 @@ struct SupabaseConfig {
 /// or mocks should back the app, based on whether credentials are present.
 enum SupabaseManager {
     /// The shared client, or `nil` when the app is not configured for Supabase.
+    /// Uses an explicit UserDefaults-backed session store: the default Keychain
+    /// store can fail (e.g. unsigned simulator builds with no app-identifier
+    /// entitlement), which silently drops the session so later authenticated
+    /// calls see no user.
     static let client: SupabaseClient? = {
         guard let config = SupabaseConfig.current else { return nil }
-        return SupabaseClient(supabaseURL: config.url, supabaseKey: config.anonKey)
+        return SupabaseClient(
+            supabaseURL: config.url,
+            supabaseKey: config.anonKey,
+            options: SupabaseClientOptions(
+                auth: SupabaseClientOptions.AuthOptions(storage: UserDefaultsLocalStorage())
+            )
+        )
     }()
 
     static var isConfigured: Bool { client != nil }
@@ -50,6 +60,16 @@ enum SupabaseManager {
     static func makeCollectionRepository() -> any CollectionRepository {
         client.map { SupabaseCollectionRepository(client: $0) } ?? MockCollectionRepository()
     }
+}
+
+/// Session storage backed by UserDefaults. Reliable across signed/unsigned
+/// builds and simulators where the default Keychain store may be unavailable.
+struct UserDefaultsLocalStorage: AuthLocalStorage {
+    private let defaults = UserDefaults.standard
+
+    func store(key: String, value: Data) throws { defaults.set(value, forKey: key) }
+    func retrieve(key: String) throws -> Data? { defaults.data(forKey: key) }
+    func remove(key: String) throws { defaults.removeObject(forKey: key) }
 }
 
 /// Errors surfaced by the live Supabase service implementations.

@@ -14,7 +14,7 @@ final class SupabaseCollectionRepository: CollectionRepository {
     }
 
     func fetchAll() async throws -> [CollectionItem] {
-        let userId = try currentUserId()
+        let userId = try await currentUserId()
         let rows: [CollectionItemRow] = try await client
             .from(table)
             .select()
@@ -26,7 +26,7 @@ final class SupabaseCollectionRepository: CollectionRepository {
     }
 
     func save(_ item: CollectionItem) async throws {
-        let userId = try currentUserId()
+        let userId = try await currentUserId()
         let row = CollectionItemRow(item: item, userId: userId)
         try await client.from(table).upsert(row, onConflict: "item_id").execute()
     }
@@ -36,7 +36,7 @@ final class SupabaseCollectionRepository: CollectionRepository {
     }
 
     func delete(_ itemId: String) async throws {
-        let userId = try currentUserId()
+        let userId = try await currentUserId()
         try await client
             .from(table)
             .delete()
@@ -46,7 +46,7 @@ final class SupabaseCollectionRepository: CollectionRepository {
     }
 
     func item(for id: String) async throws -> CollectionItem? {
-        let userId = try currentUserId()
+        let userId = try await currentUserId()
         let rows: [CollectionItemRow] = try await client
             .from(table)
             .select()
@@ -58,11 +58,15 @@ final class SupabaseCollectionRepository: CollectionRepository {
         return rows.first?.makeCollectionItem()
     }
 
-    private func currentUserId() throws -> String {
-        guard let userId = client.auth.currentUser?.id.uuidString else {
+    /// Uses the awaited session (reliable) rather than the synchronous
+    /// `currentUser`, which can be nil even with an active session.
+    /// Uses the awaited session (reliable) rather than the synchronous
+    /// `currentUser`, which can be nil even with an active session.
+    private func currentUserId() async throws -> String {
+        guard let session = try? await client.auth.session else {
             throw SupabaseServiceError.notAuthenticated
         }
-        return userId
+        return session.user.id.uuidString
     }
 }
 

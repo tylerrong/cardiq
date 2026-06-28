@@ -61,8 +61,10 @@ final class SupabaseAuthenticationService: AuthenticationService {
     }
 
     func currentUser() async -> AppUser? {
-        guard let user = client.auth.currentUser else { return nil }
-        return try? await ensureProfile(for: user, appleName: nil)
+        // Awaited session reliably restores a persisted login across launches;
+        // the synchronous `currentUser` can be nil even when a session exists.
+        guard let session = try? await client.auth.session else { return nil }
+        return try? await ensureProfile(for: session.user, appleName: nil)
     }
 
     /// Removes the user's profile row and signs out. Deleting the underlying

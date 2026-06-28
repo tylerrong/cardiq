@@ -115,8 +115,7 @@ struct CollectionView: View {
             )) {
                 Button("Delete", role: .destructive) {
                     if let item = itemToDelete {
-                        modelContext.delete(item)
-                        try? modelContext.save()
+                        CollectionSync.remove(item, from: modelContext)
                         itemToDelete = nil
                     }
                 }
@@ -398,8 +397,7 @@ struct CollectionItemDetailView: View {
         }
         .alert("Remove Card", isPresented: $showDeleteConfirmation) {
             Button("Delete", role: .destructive) {
-                modelContext.delete(item)
-                try? modelContext.save()
+                CollectionSync.remove(item, from: modelContext)
                 dismiss()
             }
             Button("Cancel", role: .cancel) {}

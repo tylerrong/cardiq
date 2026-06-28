@@ -13,7 +13,7 @@ final class SupabaseImageStorageService: ImageStorageService {
     }
 
     func save(image: Data, identifier: String) async throws -> String {
-        let path = try storagePath(for: identifier)
+        let path = try await storagePath(for: identifier)
         try await client.storage
             .from(bucket)
             .upload(path, data: image, options: FileOptions(contentType: "image/jpeg", upsert: true))
@@ -28,10 +28,10 @@ final class SupabaseImageStorageService: ImageStorageService {
         _ = try await client.storage.from(bucket).remove(paths: [path])
     }
 
-    private func storagePath(for identifier: String) throws -> String {
-        guard let userId = client.auth.currentUser?.id.uuidString else {
+    private func storagePath(for identifier: String) async throws -> String {
+        guard let session = try? await client.auth.session else {
             throw SupabaseServiceError.notAuthenticated
         }
-        return "\(userId)/\(identifier).jpg"
+        return "\(session.user.id.uuidString)/\(identifier).jpg"
     }
 }
