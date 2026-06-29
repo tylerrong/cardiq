@@ -144,8 +144,7 @@ struct AddCardView: View {
         let report = MockSeedData.gradingReport(for: card.id)
         item.gradingReport = report
 
-        modelContext.insert(item)
-        try? modelContext.save()
+        CollectionSync.add(item, to: modelContext)
         dismiss()
     }
 }

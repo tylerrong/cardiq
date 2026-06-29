@@ -137,10 +137,13 @@ struct MarketCardRow: View {
                 Text(card.name)
                     .font(CIQFont.bodyBold)
                     .foregroundStyle(CIQColors.Fallback.textPrimary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
                 HStack(spacing: CIQSpacing.xxs) {
                     Text("\(card.setName) · \(card.displayNumber)")
                         .font(CIQFont.caption)
                         .foregroundStyle(CIQColors.Fallback.textSecondary)
+                        .lineLimit(1)
                 }
                 if let market, let variant = card.variant {
                     Text(variant)
@@ -162,6 +165,8 @@ struct MarketCardRow: View {
                         Text("\(lo.currencyFormatted)–\(hi.currencyFormatted)")
                             .font(CIQFont.footnoteBold)
                             .foregroundStyle(CIQColors.Fallback.textPrimary)
+                            .lineLimit(1)
+                            .fixedSize()
                         PriceChangeLabel(percentageChange: market.thirtyDayChangePercentage)
                     } else {
                         Text("Price unavailable")
@@ -197,11 +202,30 @@ struct MarketDetailView: View {
     @State private var showAddToCollection = false
     @State private var addedToCollection = false
     @State private var isWatchlisted = false
+    @State private var showWatchlistToast = false
+    @State private var watchlistToastMessage = ""
 
     private var filteredSales: [ComparableSale] {
         guard let market else { return [] }
         if hideWeakComps { return market.recentSales.filter { $0.matchQuality != .weak } }
         return market.recentSales
+    }
+
+    /// The fetched series cropped to the selected range. The data source returns
+    /// a fixed series regardless of range, so we filter client-side; if a window
+    /// has too few points we show the full series rather than an empty chart.
+    private var displayedHistory: [PriceHistoryPoint] {
+        let days: Int?
+        switch selectedTimeRange {
+        case .thirtyDays: days = 30
+        case .ninetyDays: days = 90
+        case .oneYear: days = 365
+        case .allTime: days = nil
+        }
+        guard let days else { return priceHistory }
+        let cutoff = Date().addingTimeInterval(-Double(days) * 86_400)
+        let windowed = priceHistory.filter { $0.date >= cutoff }
+        return windowed.count >= 2 ? windowed : priceHistory
     }
 
     var body: some View {
@@ -218,6 +242,9 @@ struct MarketDetailView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.top, CIQSpacing.xxxxl)
                 }
+
+                // Clear the floating tab bar / Ask CardIQ button.
+                Color.clear.frame(height: 90)
             }
             .padding(CIQSpacing.md)
         }
@@ -229,7 +256,7 @@ struct MarketDetailView: View {
                 Button {
                     toggleWatchlist()
                 } label: {
-                    Image(systemName: isWatchlisted ? "eye.fill" : "eye")
+                    Image(systemName: isWatchlisted ? "bookmark.fill" : "bookmark")
                         .foregroundStyle(isWatchlisted ? CIQColors.Fallback.accentPrimary : CIQColors.Fallback.textSecondary)
                 }
                 .accessibilityLabel(isWatchlisted ? "Remove from watchlist" : "Add to watchlist")
@@ -241,11 +268,6 @@ struct MarketDetailView: View {
             priceHistory = (try? await service.priceHistory(for: card.id, range: selectedTimeRange)) ?? []
             checkWatchlist()
         }
-        .onChange(of: selectedTimeRange) { _, newRange in
-            Task {
-                priceHistory = (try? await ServiceContainer.shared.marketData.priceHistory(for: card.id, range: newRange)) ?? []
-            }
-        }
         .sheet(isPresented: $showAddToCollection) {
             NavigationStack {
                 MarketAddToCollectionView(card: card, market: market) {
@@ -254,6 +276,7 @@ struct MarketDetailView: View {
             }
             .presentationDetents([.medium])
         }
+        .ciqToast(isPresented: $showWatchlistToast, message: watchlistToastMessage, icon: "bookmark.fill")
     }
 
     private var actionsSection: some View {
@@ -299,6 +322,9 @@ struct MarketDetailView: View {
             try? modelContext.save()
             isWatchlisted = true
         }
+        watchlistToastMessage = isWatchlisted ? "Added to watchlist" : "Removed from watchlist"
+        showWatchlistToast = true
+        CIQHaptics.tap()
     }
 
     private func valuesSection(_ market: MarketSnapshot) -> some View {
@@ -330,8 +356,8 @@ struct MarketDetailView: View {
                     .frame(width: 200)
                 }
 
-                if !priceHistory.isEmpty {
-                    Chart(priceHistory) {
+                if !displayedHistory.isEmpty {
+                    Chart(displayedHistory) {
                         LineMark(x: .value("Date", $0.date), y: .value("Price", $0.price))
                             .foregroundStyle(CIQColors.Fallback.accentPrimary)
                         AreaMark(x: .value("Date", $0.date), y: .value("Price", $0.price))
@@ -444,7 +470,8 @@ struct ComparableSaleRow: View {
                     .font(CIQFont.caption)
                     .foregroundStyle(CIQColors.Fallback.textTertiary)
                 if let grade = sale.grade, let company = sale.gradingCompany {
-                    Text("\(company) \(String(format: "%.0f", grade))")
+                    GradingCompanyBadge(company: company, height: 14)
+                    Text(String(format: "%.0f", grade))
                         .font(CIQFont.captionBold)
                         .foregroundStyle(CIQColors.Fallback.textSecondary)
                 }

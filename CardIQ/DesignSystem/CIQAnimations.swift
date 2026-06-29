@@ -100,9 +100,11 @@ struct AnimatedGradeCircle: View {
                 .frame(width: size, height: size)
 
             Text(String(format: "%.1f", displayedGrade))
-                .font(size > 80 ? CIQFont.heroGrade : CIQFont.displayLarge)
+                .font(.system(size: size * 0.42, weight: .bold, design: .rounded))
                 .foregroundStyle(gradeColor)
-                .fontDesign(.rounded)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .frame(width: size * 0.84)
                 .contentTransition(.numericText())
         }
         .onAppear {

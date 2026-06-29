@@ -404,19 +404,24 @@ enum CardTextHeuristics {
     }
 
     private static func confidence(_ card: CardIdentity, _ guess: Guess) -> Double {
-        // Exact collector number + set total is a near-certain, unique match —
-        // even if the OCR'd name is noisy.
+        let cardName = card.name.lowercased()
+        let guessName = guess.name.lowercased()
+        let nameAgrees = !guessName.isEmpty &&
+            (cardName.contains(guessName) || guessName.contains(cardName))
+
+        // Exact collector number + set total is a strong, usually-unique match —
+        // but require the OCR'd name not to contradict it. This breaks ties when
+        // several cards share a number and de-rates a likely OCR misread, so the
+        // confirm screen flags it for the user instead of asserting 97%.
         if let number = guess.number, let total = guess.setTotal,
            card.cardNumber == "\(number)/\(total)" {
-            return 0.97
+            if guessName.isEmpty { return 0.9 }   // no name read — trust the number
+            if nameAgrees { return 0.97 }         // number + name agree — near-certain
+            return 0.72                           // number matched but name disagrees
         }
 
         var score = 0.5
-        let cardName = card.name.lowercased()
-        let guessName = guess.name.lowercased()
-        if !guessName.isEmpty, cardName.contains(guessName) || guessName.contains(cardName) {
-            score += 0.3
-        }
+        if nameAgrees { score += 0.3 }
         if let number = guess.number, card.cardNumber.hasPrefix(number) {
             score += 0.2
         }

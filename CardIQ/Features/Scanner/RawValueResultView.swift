@@ -192,8 +192,7 @@ struct RawValueResultView: View {
                     Button {
                         let item = CollectionItem(cardIdentity: card)
                         item.marketSnapshot = market
-                        modelContext.insert(item)
-                        try? modelContext.save()
+                        CollectionSync.add(item, to: modelContext)
                         savedToCollection = true
                         showToast = true
                         CIQHaptics.success()

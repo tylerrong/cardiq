@@ -197,8 +197,7 @@ struct GradeROIView: View {
         )
         item.gradingReport = report
         item.marketSnapshot = market
-        modelContext.insert(item)
-        try? modelContext.save()
+        CollectionSync.add(item, to: modelContext)
         savedToCollection = true
         CIQHaptics.success()
     }
