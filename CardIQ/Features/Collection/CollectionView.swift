@@ -509,10 +509,8 @@ struct CollectionItemDetailView: View {
 
                 if let grade = item.officialGrade, let company = item.officialGradingCompany {
                     HStack {
-                        VStack(alignment: .leading) {
-                            Text("Official")
-                                .font(CIQFont.caption)
-                                .foregroundStyle(CIQColors.Fallback.textSecondary)
+                        VStack(alignment: .leading, spacing: CIQSpacing.xxs) {
+                            GradingCompanyBadge(company: company, height: 18)
                             Text("\(company) \(Int(grade))")
                                 .font(CIQFont.displayMedium)
                                 .foregroundStyle(CIQColors.Fallback.accentPrimary)
