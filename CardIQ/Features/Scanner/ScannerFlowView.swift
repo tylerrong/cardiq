@@ -284,7 +284,10 @@ struct CaptureView: View {
 
             ZStack {
                 #if canImport(UIKit)
-                CameraPreview(session: camera.session)
+                CameraPreview(session: camera.session) { devicePoint in
+                    CIQHaptics.tap()
+                    camera.focus(at: devicePoint)
+                }
                 if camera.cameraUnavailable {
                     VStack(spacing: CIQSpacing.sm) {
                         Image(systemName: "video.slash")
