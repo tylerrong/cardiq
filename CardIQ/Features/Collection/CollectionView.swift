@@ -280,6 +280,10 @@ struct CollectionGridCell: View {
                     PriceChangeLabel(percentageChange: item.gainLossPercentage)
                 }
             }
+
+            if let roi = GradeVerdict.compute(for: item) {
+                VerdictChip(roi: roi)
+            }
         }
     }
 }
@@ -299,13 +303,17 @@ struct CollectionListRow: View {
                     Text(item.cardIdentity?.setName ?? "")
                         .font(CIQFont.caption)
                         .foregroundStyle(CIQColors.Fallback.textSecondary)
+                        .lineLimit(1)
                     if let grade = item.officialGrade, let co = item.officialGradingCompany {
                         GradeBadge(grade: "\(co) \(Int(grade))")
-                    } else {
-                        Text("Raw")
-                            .font(CIQFont.captionBold)
-                            .foregroundStyle(CIQColors.Fallback.textTertiary)
                     }
+                }
+                if let roi = GradeVerdict.compute(for: item) {
+                    VerdictChip(roi: roi)
+                } else if item.officialGrade == nil {
+                    Text("Raw")
+                        .font(CIQFont.captionBold)
+                        .foregroundStyle(CIQColors.Fallback.textTertiary)
                 }
             }
 
