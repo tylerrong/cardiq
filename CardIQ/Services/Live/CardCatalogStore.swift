@@ -108,18 +108,26 @@ actor CardCatalogStore {
     func matchByName(_ rawName: String, language: String? = nil, limit: Int = 60) -> [CardIdentity] {
         loadFromDiskIfNeeded()
         let guess = CardTextHeuristics.squash(rawName)
-        guard guess.count >= 4 else { return [] }
+        guard guess.count >= 3 else { return [] }   // shortest real names: Mew, Muk
         let pools = language == "ja" ? [jaCards] : (language == "en" ? [cards] : [cards, jaCards])
+        // Exact-name matches are collected without a cap: a short name like
+        // "Mew" substring-matches hundreds of cards (Mewtwo, ...), and the
+        // newest-first pool order would otherwise crowd out an older exact
+        // match (the 2006 Mew) before it's ever reached.
+        var exactHits: [CardIdentity] = []
         var hits: [CardIdentity] = []
         for pool in pools {
             for card in pool {
                 let name = CardTextHeuristics.squash(card.name)
-                guard name.count >= 3, CardTextHeuristics.namesSimilar(name, guess) else { continue }
-                hits.append(card)
-                if hits.count >= limit { return hits }
+                guard name.count >= 3 else { continue }
+                if name == guess {
+                    exactHits.append(card)
+                } else if hits.count < limit, CardTextHeuristics.namesSimilar(name, guess) {
+                    hits.append(card)
+                }
             }
         }
-        return hits
+        return exactHits + hits
     }
 
     /// Numerator-only lookup for promo prints ("SWSH284" with no /total).
