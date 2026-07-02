@@ -211,10 +211,14 @@ actor CardCatalogStore {
         guard !loadedFromDisk else { return }
         loadedFromDisk = true
 
-        // Japanese catalog: always served from the bundled snapshot.
+        // Japanese catalog: always served from the bundled snapshot. `variant`
+        // carries the original kana name, so both English and Japanese queries
+        // match.
         if let file = Self.loadBundledSeed(named: "card-catalog-seed-ja") {
             jaCards = file.cards
-            jaSearchKeys = file.cards.map { "\($0.name) \($0.setName) \($0.setCode) \($0.cardNumber)".lowercased() }
+            jaSearchKeys = file.cards.map {
+                "\($0.name) \($0.variant ?? "") \($0.setName) \($0.setCode) \($0.cardNumber)".lowercased()
+            }
         }
 
         // English catalog: prefer the on-disk cache (has post-install refreshes)...

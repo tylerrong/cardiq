@@ -72,7 +72,13 @@ final class PokemonTCGCardIdentificationService: CardIdentificationService {
         }
         return matches.map { card in
             var copy = card
-            let nameAgrees = !guess.name.isEmpty && (card.name.contains(guess.name) || guess.name.contains(card.name))
+            // The OCR read is kana; catalog names are English with the original
+            // Japanese name in `variant` — compare against both.
+            let kana = card.variant ?? ""
+            let nameAgrees = !guess.name.isEmpty && (
+                card.name.contains(guess.name) || guess.name.contains(card.name) ||
+                (!kana.isEmpty && (kana.contains(guess.name) || guess.name.contains(kana)))
+            )
             copy.identificationConfidence = nameAgrees ? 0.95 : 0.85
             return copy
         }
