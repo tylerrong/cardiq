@@ -5,18 +5,20 @@ import SwiftUI
 // collection cells and a price ladder with a "your copy lands here" marker
 // on the card page.
 
-/// Computes the grading verdict for a collection item using the same ROI
-/// calculator as the full report. Nil when the item is already graded or is
-/// missing a condition read / pricing.
+/// Computes the grading verdict for a collection item — evaluated across all
+/// grading companies, returning the best one's economics. Nil when the item
+/// is already graded or is missing a condition read / pricing.
 enum GradeVerdict {
     static func compute(for item: CollectionItem) -> GradeROIResult? {
         guard item.officialGrade == nil,
               let report = item.gradingReport,
               let market = item.marketSnapshot, market.rawEstimatedValue > 0
         else { return nil }
-        var input = ROIInput.default
-        input.purchasePrice = item.purchasePrice ?? 0
-        return DefaultGradeROICalculator().calculate(gradingReport: report, marketSnapshot: market, input: input)
+        return GradingCompanyComparison.outcomes(
+            report: report,
+            market: market,
+            purchasePrice: item.purchasePrice ?? 0
+        ).first?.result
     }
 }
 
@@ -36,7 +38,7 @@ struct VerdictChip: View {
 
     private var label: String {
         switch roi.recommendation {
-        case .grade: "Grade \(roi.expectedProfit.wholeSignedCurrency)"
+        case .grade: "Grade \(roi.gradingCompany) \(roi.expectedProfit.wholeSignedCurrency)"
         case .considerGrading: "Consider Grading"
         case .sellRaw: "Sell Raw"
         case .hold: "Hold"
