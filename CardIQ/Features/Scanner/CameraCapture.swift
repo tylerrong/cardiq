@@ -25,9 +25,15 @@ final class CardCameraController: NSObject, ObservableObject, @unchecked Sendabl
     @Published var detection: CardDetection = .searching
     @Published var authorized = AVCaptureDevice.authorizationStatus(for: .video) == .authorized
     @Published var torchOn = false
+    /// No usable camera: simulator, permission denied, or hardware in use.
+    /// The scan UI shows an "import instead" state and the shutter no-ops.
+    @Published var cameraUnavailable = false
 
     /// Set by the view; called (on main) with the cropped card image when captured.
     var onCapture: ((Data) -> Void)?
+    /// Called (on main) when a capture attempt can't produce a photo, so the
+    /// view can unwind capture-in-progress UI (e.g. the flash overlay).
+    var onCaptureFailed: (() -> Void)?
     private var configured = false
     private var captureDevice: AVCaptureDevice?
 
@@ -35,7 +41,10 @@ final class CardCameraController: NSObject, ObservableObject, @unchecked Sendabl
         AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
             guard let self else { return }
             DispatchQueue.main.async { self.authorized = granted }
-            guard granted else { return }
+            guard granted else {
+                DispatchQueue.main.async { self.cameraUnavailable = true }
+                return
+            }
             self.queue.async {
                 self.configureIfNeeded()
                 if !self.session.isRunning { self.session.startRunning() }
@@ -74,8 +83,22 @@ final class CardCameraController: NSObject, ObservableObject, @unchecked Sendabl
     /// Manual shutter — capture and crop to the detected card.
     func capture() {
         queue.async { [weak self] in
-            guard let self, self.configured else { return }
-            self.photoOutput.capturePhoto(with: AVCapturePhotoSettings(), delegate: self)
+            guard let self else { return }
+            // capturePhoto throws an unrecoverable ObjC exception when the
+            // session has no live video connection (simulator, permission
+            // denied, session interrupted) — bail out instead of crashing.
+            guard self.configured,
+                  let connection = self.photoOutput.connection(with: .video),
+                  connection.isEnabled, connection.isActive else {
+                DispatchQueue.main.async { [weak self] in
+                    self?.cameraUnavailable = true
+                    self?.onCaptureFailed?()
+                }
+                return
+            }
+            let settings = AVCapturePhotoSettings()
+            settings.photoQualityPrioritization = .quality
+            self.photoOutput.capturePhoto(with: settings, delegate: self)
         }
     }
 
@@ -84,13 +107,19 @@ final class CardCameraController: NSObject, ObservableObject, @unchecked Sendabl
         session.beginConfiguration()
         session.sessionPreset = .photo
 
-        if let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
+        if let device = Self.bestCaptureDevice(),
            let input = try? AVCaptureDeviceInput(device: device),
            session.canAddInput(input) {
             session.addInput(input)
             captureDevice = device
+            configureFocus(device)
+        } else {
+            DispatchQueue.main.async { [weak self] in self?.cameraUnavailable = true }
         }
-        if session.canAddOutput(photoOutput) { session.addOutput(photoOutput) }
+        if session.canAddOutput(photoOutput) {
+            session.addOutput(photoOutput)
+            photoOutput.maxPhotoQualityPrioritization = .quality
+        }
 
         videoOutput.alwaysDiscardsLateVideoFrames = true
         videoOutput.setSampleBufferDelegate(self, queue: queue)
@@ -98,6 +127,58 @@ final class CardCameraController: NSObject, ObservableObject, @unchecked Sendabl
 
         session.commitConfiguration()
         configured = true
+    }
+
+    /// Prefer a virtual multi-lens device: it auto-switches to the ultra-wide
+    /// macro lens when the subject gets close — exactly the "fill the frame
+    /// with the card" case where the bare wide lens can't focus.
+    private static func bestCaptureDevice() -> AVCaptureDevice? {
+        AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.builtInTripleCamera, .builtInDualWideCamera, .builtInWideAngleCamera],
+            mediaType: .video,
+            position: .back
+        ).devices.first
+    }
+
+    /// Card scanning is always close-up: restrict autofocus to the near range
+    /// so the lens doesn't hunt to infinity, and disable smooth (video) AF so
+    /// it snaps instead of glides.
+    private func configureFocus(_ device: AVCaptureDevice) {
+        guard (try? device.lockForConfiguration()) != nil else { return }
+        if device.isFocusModeSupported(.continuousAutoFocus) {
+            device.focusMode = .continuousAutoFocus
+        }
+        if device.isAutoFocusRangeRestrictionSupported {
+            device.autoFocusRangeRestriction = .near
+        }
+        if device.isSmoothAutoFocusSupported {
+            device.isSmoothAutoFocusEnabled = false
+        }
+        if device.isFocusPointOfInterestSupported {
+            device.focusPointOfInterest = CGPoint(x: 0.5, y: 0.5)
+        }
+        if device.isExposureModeSupported(.continuousAutoExposure) {
+            device.exposureMode = .continuousAutoExposure
+        }
+        device.unlockForConfiguration()
+    }
+
+    /// Tap-to-focus: refocus and re-expose at a point of interest
+    /// (device-space coordinates, 0-1).
+    func focus(at devicePoint: CGPoint) {
+        queue.async { [weak self] in
+            guard let self, let device = self.captureDevice,
+                  (try? device.lockForConfiguration()) != nil else { return }
+            if device.isFocusPointOfInterestSupported {
+                device.focusPointOfInterest = devicePoint
+                device.focusMode = .continuousAutoFocus
+            }
+            if device.isExposurePointOfInterestSupported {
+                device.exposurePointOfInterest = devicePoint
+                device.exposureMode = .continuousAutoExposure
+            }
+            device.unlockForConfiguration()
+        }
     }
 
     private func detectRectangles(handler: VNImageRequestHandler) -> VNRectangleObservation? {
@@ -142,7 +223,11 @@ extension CardCameraController: AVCapturePhotoCaptureDelegate {
         didFinishProcessingPhoto photo: AVCapturePhoto,
         error: Error?
     ) {
-        guard let data = photo.fileDataRepresentation() else { return }
+        guard error == nil, let data = photo.fileDataRepresentation() else {
+            let failure = onCaptureFailed
+            DispatchQueue.main.async { failure?() }
+            return
+        }
         let result = croppedToCard(data) ?? data
         let completion = onCapture
         DispatchQueue.main.async { completion?(result) }
@@ -175,22 +260,42 @@ extension CardCameraController: AVCapturePhotoCaptureDelegate {
     }
 }
 
-/// SwiftUI view that renders the live camera preview layer.
+/// SwiftUI view that renders the live camera preview layer. Tapping the
+/// preview refocuses at that point.
 struct CameraPreview: UIViewRepresentable {
     let session: AVCaptureSession
+    /// Called with the tapped point in device space (0-1) for tap-to-focus.
+    var onTap: ((CGPoint) -> Void)?
 
     func makeUIView(context: Context) -> PreviewView {
         let view = PreviewView()
         view.previewLayer.session = session
         view.previewLayer.videoGravity = .resizeAspectFill
+        view.onTap = onTap
         return view
     }
 
-    func updateUIView(_ uiView: PreviewView, context: Context) {}
+    func updateUIView(_ uiView: PreviewView, context: Context) {
+        uiView.onTap = onTap
+    }
 
     final class PreviewView: UIView {
         override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
         var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
+        var onTap: ((CGPoint) -> Void)?
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(handleTap(_:))))
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+        @objc private func handleTap(_ gesture: UITapGestureRecognizer) {
+            let layerPoint = gesture.location(in: self)
+            let devicePoint = previewLayer.captureDevicePointConverted(fromLayerPoint: layerPoint)
+            onTap?(devicePoint)
+        }
     }
 }
 #endif

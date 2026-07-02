@@ -25,16 +25,29 @@ final class PokemonTCGCardIdentificationService: CardIdentificationService {
         // Simulator's placeholder data, since there's no camera — fall back to a
         // live browse list so the scan flow still surfaces real candidate cards
         // instead of hard-failing. On a real device a genuine photo is read here.
-        let lines: [RecognizedLine]
+        var lines: [RecognizedLine]
         do {
             lines = try await CardTextRecognizer.recognize(in: frontImage)
         } catch {
             return await allCards()
         }
 
-        guard let guess = CardTextHeuristics.bestGuess(from: lines) else {
-            throw CIQError.identificationFailed
+        var guess = CardTextHeuristics.bestGuess(from: lines)
+
+        // The collector number is the strongest signal but also the smallest
+        // print on the card (and gold/stylized on alt arts). When the full-frame
+        // pass misses it, re-OCR just the bottom strip where it lives.
+        if guess?.number == nil,
+           let bottomLines = try? await CardTextRecognizer.recognize(
+               in: frontImage,
+               regionOfInterest: CGRect(x: 0, y: 0, width: 1, height: 0.16)
+           ),
+           !bottomLines.isEmpty {
+            lines.append(contentsOf: bottomLines)
+            guess = CardTextHeuristics.bestGuess(from: lines)
         }
+
+        guard let guess else { throw CIQError.identificationFailed }
 
         // Japanese card: the OCR'd name is kana/kanji. Route to the local
         // Japanese catalog — the English catalog would otherwise "match" the
@@ -45,13 +58,24 @@ final class PokemonTCGCardIdentificationService: CardIdentificationService {
             // Fall through: script detection can misfire on holo glare.
         }
 
-        // The collector number "NNN/NNN" is the most reliable id — number + set total
-        // pin the exact card. Fall back to the name only when the number isn't read.
-        let matches: [CardIdentity]
+        // Local catalog first: matching we control (zero-padding, TG/GG/promo
+        // prefixes, squashed OCR names), offline, no rate limits. The live API
+        // is the fallback for anything the local catalog doesn't know.
+        var matches: [CardIdentity] = []
         if let number = guess.number, let total = guess.setTotal {
-            matches = try await client.searchByNumber(number: number, setTotal: total, name: guess.name)
-        } else {
-            matches = try await client.searchCards(name: guess.name, number: guess.number)
+            matches = await CardCatalogStore.shared.searchByNumber(number, total: total, language: "en")
+        } else if let number = guess.number {
+            matches = await CardCatalogStore.shared.searchByNumerator(number, language: "en")
+        }
+        if matches.isEmpty, !guess.name.isEmpty {
+            matches = await CardCatalogStore.shared.matchByName(guess.name, language: "en")
+        }
+        if matches.isEmpty {
+            if let number = guess.number, let total = guess.setTotal {
+                matches = (try? await client.searchByNumber(number: number, setTotal: total, name: guess.name)) ?? []
+            } else {
+                matches = (try? await client.searchCards(name: guess.name, number: guess.number)) ?? []
+            }
         }
 
         guard !matches.isEmpty else { throw CIQError.identificationFailed }
@@ -377,11 +401,17 @@ struct RecognizedLine: Sendable {
 enum CardTextRecognizer {
     /// Recognizes text from card image data, preserving each line's position so the
     /// heuristics can use it (name = top + biggest font; number = NNN/NNN near bottom).
-    static func recognize(in imageData: Data) async throws -> [RecognizedLine] {
+    /// `regionOfInterest` (Vision space, 0 = bottom) restricts a pass to part of the
+    /// card — used to re-read the tiny collector number strip when a full pass misses it.
+    static func recognize(in imageData: Data, regionOfInterest: CGRect? = nil) async throws -> [RecognizedLine] {
         try await Task.detached(priority: .userInitiated) {
             let request = VNRecognizeTextRequest()
             request.recognitionLevel = .accurate
             request.usesLanguageCorrection = false
+            if let regionOfInterest {
+                request.regionOfInterest = regionOfInterest
+                request.minimumTextHeight = 0.01
+            }
             // Read Japanese prints too — kana/kanji names route identification
             // to the Japanese catalog.
             request.automaticallyDetectsLanguage = true
@@ -396,11 +426,16 @@ enum CardTextRecognizer {
 
             return (request.results ?? []).compactMap { observation in
                 guard let text = observation.topCandidates(1).first?.string else { return nil }
-                return RecognizedLine(
-                    text: text,
-                    midY: observation.boundingBox.midY,
-                    height: observation.boundingBox.height
-                )
+                // Vision reports boxes relative to the regionOfInterest — remap
+                // to full-image space so position/size heuristics stay valid
+                // when strip-pass lines are merged with full-pass lines.
+                var midY = observation.boundingBox.midY
+                var height = observation.boundingBox.height
+                if let roi = regionOfInterest {
+                    midY = roi.minY + midY * roi.height
+                    height *= roi.height
+                }
+                return RecognizedLine(text: text, midY: midY, height: height)
             }
         }.value
     }
@@ -413,6 +448,9 @@ enum CardTextHeuristics {
         let name: String
         let number: String?
         let setTotal: String?
+        /// Copyright year printed on the card ("©2023 Pokémon") — a cheap
+        /// tie-breaker when the same number/total exists in multiple sets.
+        var year: Int?
     }
 
     private static let nonNamePrefixes = ["basic", "stage", "evolves", "ability", "hp", "weakness", "resistance", "retreat", "no."]
@@ -420,12 +458,23 @@ enum CardTextHeuristics {
     static func bestGuess(from lines: [RecognizedLine]) -> Guess? {
         guard !lines.isEmpty else { return nil }
 
-        // Collector number "NNN/NNN" near the bottom — the most reliable id (the
-        // total pins the set, the numerator the card).
-        let collector = lines
+        // Collector number near the bottom — the most reliable id (the total
+        // pins the set, the numerator the card). Gather every candidate and
+        // prefer ones with a 2+ digit total: a 1-digit total is usually a
+        // truncated read ("9/1" from "9/111").
+        let candidates = lines
             .sorted { $0.midY < $1.midY }
-            .compactMap { collectorNumber(in: $0.text) }
-            .first
+            .flatMap { collectorNumbers(in: $0.text) }
+        var collector = candidates.first { digitsOnly($0.total).count >= 2 } ?? candidates.first
+
+        // Promo prints have no "/total" — just a prefixed number ("SWSH284").
+        if collector == nil {
+            collector = lines
+                .sorted { $0.midY < $1.midY }
+                .compactMap { promoNumber(in: $0.text) }
+                .first
+                .map { (numerator: $0, total: "") }
+        }
 
         // Card name: top of the card (high midY in Vision space), biggest font,
         // skipping structural labels (HP, Stage, Ability, attack text, etc.).
@@ -443,8 +492,20 @@ enum CardTextHeuristics {
         return Guess(
             name: rawName.map(cleanName) ?? "",
             number: collector?.numerator,
-            setTotal: collector?.total
+            setTotal: (collector?.total.isEmpty ?? true) ? nil : collector?.total,
+            year: copyrightYear(in: lines)
         )
+    }
+
+    /// Standalone promo number ("SWSH284", "SVP049"): uppercase prefix glued
+    /// to digits, no slash. Lowercase runs are excluded — they're usually OCR
+    /// noise from flavor text.
+    private static func promoNumber(in text: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: "\\b([A-Z]{2,5}\\d{2,3})\\b") else { return nil }
+        let range = NSRange(text.startIndex..., in: text)
+        guard let match = regex.firstMatch(in: text, range: range),
+              let r = Range(match.range(at: 1), in: text) else { return nil }
+        return String(text[r])
     }
 
     /// True when the text contains hiragana, katakana, or kanji — the signal
@@ -470,14 +531,100 @@ enum CardTextHeuristics {
         return s.replacingOccurrences(of: "  ", with: " ").trimmingCharacters(in: .whitespaces)
     }
 
-    /// Returns the numerator and set-total of a "NNN/NNN" collector number.
-    private static func collectorNumber(in text: String) -> (numerator: String, total: String)? {
-        guard let regex = try? NSRegularExpression(pattern: "\\b(\\d{1,3})/(\\d{1,3})\\b") else { return nil }
+    /// Every collector number in a line. Handles zero-padding ("047/198"),
+    /// prefixed numerators/totals (TG12/TG30, GG44/GG70), and promo-style
+    /// prints (SWSH284/307).
+    private static func collectorNumbers(in text: String) -> [(numerator: String, total: String)] {
+        guard let regex = try? NSRegularExpression(pattern: "\\b([A-Za-z]{0,5}\\d{1,3})\\s*/\\s*([A-Za-z]{0,5}\\d{1,3})\\b") else { return [] }
         let range = NSRange(text.startIndex..., in: text)
-        guard let match = regex.firstMatch(in: text, range: range),
-              let numeratorRange = Range(match.range(at: 1), in: text),
-              let totalRange = Range(match.range(at: 2), in: text) else { return nil }
-        return (String(text[numeratorRange]), String(text[totalRange]))
+        return regex.matches(in: text, range: range).compactMap { match in
+            guard let numeratorRange = Range(match.range(at: 1), in: text),
+                  let totalRange = Range(match.range(at: 2), in: text) else { return nil }
+            return (String(text[numeratorRange]), String(text[totalRange]))
+        }
+    }
+
+    /// Latest plausible copyright year printed on the card (bottom text,
+    /// "©1999-2023 Pokémon..." → 2023).
+    private static func copyrightYear(in lines: [RecognizedLine]) -> Int? {
+        guard let regex = try? NSRegularExpression(pattern: "\\b(19|20)\\d{2}\\b") else { return nil }
+        var latest: Int?
+        for line in lines where line.midY < 0.25 {
+            let range = NSRange(line.text.startIndex..., in: line.text)
+            for match in regex.matches(in: line.text, range: range) {
+                guard let r = Range(match.range, in: line.text),
+                      let year = Int(line.text[r]), (1995...2035).contains(year) else { continue }
+                latest = max(latest ?? 0, year)
+            }
+        }
+        return latest
+    }
+
+    // MARK: Normalized matching (shared by ranking + catalog lookups)
+
+    static func digitsOnly(_ s: String) -> String { s.filter(\.isNumber) }
+
+    /// "047" -> "47", "TG12" -> "TG12", "swsh284" -> "SWSH284".
+    static func normalizedNumerator(_ s: String) -> String {
+        let upper = s.uppercased()
+        let letters = upper.prefix { $0.isLetter }
+        let digits = upper.drop { $0.isLetter }
+        let trimmed = digits.drop { $0 == "0" }
+        return String(letters) + (trimmed.isEmpty ? "0" : String(trimmed))
+    }
+
+    /// Whether a catalog card number ("47/198", "TG12/30") matches an OCR'd
+    /// numerator/total, tolerant of zero-padding and letter-prefixed totals.
+    static func numberMatches(cardNumber: String, numerator: String, total: String) -> Bool {
+        let parts = cardNumber.split(separator: "/")
+        guard parts.count == 2 else { return false }
+        guard normalizedNumerator(String(parts[0])) == normalizedNumerator(numerator) else { return false }
+        let cardTotal = digitsOnly(String(parts[1]))
+        let guessTotal = digitsOnly(total)
+        return !cardTotal.isEmpty && Int(cardTotal) == Int(guessTotal)
+    }
+
+    /// Name comparison tolerant of OCR dropping spaces and casing
+    /// ("UmbreonVMAx" vs "Umbreon VMAX", "MeweX" vs "Mew ex").
+    static func namesAgree(_ cardName: String, _ guessName: String) -> Bool {
+        let card = squash(cardName)
+        let guess = squash(guessName)
+        guard card.count >= 3, guess.count >= 3 else { return false }
+        return namesSimilar(card, guess)
+    }
+
+    /// Squashed-name comparison: substring either way, or — for longer names —
+    /// a small edit distance to absorb single-glyph OCR confusions
+    /// ("mewtwoystar" vs "mewtwovstar"). The budget scales with length so
+    /// short names like machop/machoke can't false-positive.
+    static func namesSimilar(_ a: String, _ b: String) -> Bool {
+        if a.contains(b) || b.contains(a) { return true }
+        guard a.count >= 8, b.count >= 8, abs(a.count - b.count) <= 2 else { return false }
+        let allowed = max(1, min(a.count, b.count) / 8)
+        return editDistance(a, b, limit: allowed) <= allowed
+    }
+
+    static func squash(_ s: String) -> String {
+        s.lowercased().filter { $0.isLetter || $0.isNumber }
+    }
+
+    /// Levenshtein distance with an early-out once `limit` is exceeded.
+    private static func editDistance(_ a: String, _ b: String, limit: Int) -> Int {
+        let ac = Array(a.utf8), bc = Array(b.utf8)
+        var prev = Array(0...bc.count)
+        var curr = [Int](repeating: 0, count: bc.count + 1)
+        for i in 1...ac.count {
+            curr[0] = i
+            var rowMin = curr[0]
+            for j in 1...bc.count {
+                let cost = ac[i - 1] == bc[j - 1] ? 0 : 1
+                curr[j] = min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
+                rowMin = min(rowMin, curr[j])
+            }
+            if rowMin > limit { return limit + 1 }
+            swap(&prev, &curr)
+        }
+        return prev[bc.count]
     }
 
     static func rank(_ cards: [CardIdentity], against guess: Guess) -> [CardIdentity] {
@@ -491,27 +638,54 @@ enum CardTextHeuristics {
     }
 
     private static func confidence(_ card: CardIdentity, _ guess: Guess) -> Double {
-        let cardName = card.name.lowercased()
-        let guessName = guess.name.lowercased()
-        let nameAgrees = !guessName.isEmpty &&
-            (cardName.contains(guessName) || guessName.contains(cardName))
+        let nameAgrees = namesAgree(card.name, guess.name)
+        let nameExact = !guess.name.isEmpty && squash(card.name) == squash(guess.name)
+        // Year tie-break: the printed © year separates sets that share a
+        // number/total ("160/159" exists in Crown Zenith and Journey Together).
+        let yearAgrees: Bool? = guess.year.flatMap { y in card.year > 0 ? y == card.year : nil }
 
         // Exact collector number + set total is a strong, usually-unique match —
         // but require the OCR'd name not to contradict it. This breaks ties when
         // several cards share a number and de-rates a likely OCR misread, so the
         // confirm screen flags it for the user instead of asserting 97%.
-        if let number = guess.number, let total = guess.setTotal,
-           card.cardNumber == "\(number)/\(total)" {
-            if guessName.isEmpty { return 0.9 }   // no name read — trust the number
-            if nameAgrees { return 0.97 }         // number + name agree — near-certain
-            return 0.72                           // number matched but name disagrees
+        // A prefixed promo numerator with no printed total ("SWSH284") counts too.
+        let strongNumberMatch: Bool
+        if let number = guess.number, let total = guess.setTotal {
+            strongNumberMatch = numberMatches(cardNumber: card.cardNumber, numerator: number, total: total)
+        } else if let number = guess.number, normalizedNumerator(number).contains(where: \.isLetter) {
+            let cardNumerator = card.cardNumber.split(separator: "/").first.map(String.init) ?? card.cardNumber
+            strongNumberMatch = normalizedNumerator(cardNumerator) == normalizedNumerator(number)
+        } else {
+            strongNumberMatch = false
+        }
+        if strongNumberMatch {
+            var score: Double
+            if guess.name.isEmpty {
+                score = 0.9                       // no name read — trust the number
+            } else if nameAgrees {
+                score = 0.97                      // number + name agree — near-certain
+            } else {
+                score = 0.72                      // number matched but name disagrees
+            }
+            if let yearAgrees {
+                score += yearAgrees ? 0.02 : -0.1
+            }
+            return min(max(score, 0.05), 0.99)
         }
 
         var score = 0.5
-        if nameAgrees { score += 0.3 }
-        if let number = guess.number, card.cardNumber.hasPrefix(number) {
-            score += 0.2
+        if nameAgrees { score += 0.25 }
+        // A card name that accounts for (nearly) the whole OCR read beats a
+        // partial prefix match — "MewtwoYSTAR" is Mewtwo VSTAR, not Mewtwo.
+        let nameStrong = nameAgrees && squash(card.name).count >= squash(guess.name).count - 2
+        if nameExact { score += 0.1 } else if nameStrong { score += 0.08 }
+        if let number = guess.number,
+           normalizedNumerator(String(card.cardNumber.split(separator: "/").first ?? "")) == normalizedNumerator(number) {
+            score += 0.1
         }
-        return min(score, 0.99)
+        if let yearAgrees {
+            score += yearAgrees ? 0.05 : -0.1
+        }
+        return min(max(score, 0.05), 0.99)
     }
 }

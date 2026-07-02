@@ -284,13 +284,33 @@ struct CaptureView: View {
 
             ZStack {
                 #if canImport(UIKit)
-                CameraPreview(session: camera.session)
+                CameraPreview(session: camera.session) { devicePoint in
+                    CIQHaptics.tap()
+                    camera.focus(at: devicePoint)
+                }
+                if camera.cameraUnavailable {
+                    VStack(spacing: CIQSpacing.sm) {
+                        Image(systemName: "video.slash")
+                            .font(.system(size: 32, weight: .light))
+                            .foregroundStyle(CIQColors.Fallback.textTertiary)
+                        Text("Camera Unavailable")
+                            .font(CIQFont.footnoteBold)
+                            .foregroundStyle(CIQColors.Fallback.textPrimary)
+                        Text("Use Import below to add a photo of the card instead.")
+                            .font(CIQFont.caption)
+                            .foregroundStyle(CIQColors.Fallback.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, CIQSpacing.lg)
+                    }
+                } else {
+                    CardAlignmentOverlay()
+                }
                 #else
                 Color.black
-                #endif
                 CardAlignmentOverlay()
+                #endif
             }
-            .frame(width: 260, height: 364)
+            .frame(width: 320, height: 448)
             .clipShape(RoundedRectangle(cornerRadius: CIQRadius.lg))
             .overlay {
                 #if canImport(UIKit)
@@ -308,7 +328,9 @@ struct CaptureView: View {
                 .padding(.horizontal, CIQSpacing.xxl)
 
             #if canImport(UIKit)
-            CIQBadge(text: detectionText, color: detectionColor)
+            if !camera.cameraUnavailable {
+                CIQBadge(text: detectionText, color: detectionColor)
+            }
             #endif
 
             Spacer()
@@ -380,6 +402,9 @@ struct CaptureView: View {
             camera.onCapture = { data in
                 showFlash = false
                 onCapture(data)
+            }
+            camera.onCaptureFailed = {
+                showFlash = false
             }
             camera.start()
         }

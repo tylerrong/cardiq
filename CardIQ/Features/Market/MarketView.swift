@@ -232,6 +232,9 @@ struct MarketDetailView: View {
     @State private var marketUnavailable = false
     @State private var priceHistory: [PriceHistoryPoint] = []
     @State private var selectedTimeRange: TimeRange = .thirtyDays
+    /// The user's copy of this card, when they own one — powers the ladder
+    /// marker and the verdict chip.
+    @State private var ownedItem: CollectionItem?
     @State private var hideWeakComps = false
     @State private var showAddToCollection = false
     @State private var addedToCollection = false
@@ -304,6 +307,7 @@ struct MarketDetailView: View {
         }
         .task {
             let service = ServiceContainer.shared.marketData
+            checkOwnership()
             market = await MarketSnapshotCache.shared.snapshot(for: card.id)
             marketUnavailable = market == nil
             priceHistory = (try? await service.priceHistory(for: card.id, range: selectedTimeRange)) ?? []
@@ -381,6 +385,14 @@ struct MarketDetailView: View {
         }
     }
 
+    /// Card ids live inside encoded blobs, so match in memory — collections
+    /// are small.
+    private func checkOwnership() {
+        let descriptor = FetchDescriptor<CollectionItem>()
+        let items = (try? modelContext.fetch(descriptor)) ?? []
+        ownedItem = items.first { $0.cardIdentity?.id == card.id }
+    }
+
     private func checkWatchlist() {
         let cardId = card.id
         let descriptor = FetchDescriptor<WatchlistItem>(predicate: #Predicate { $0.cardId == cardId })
@@ -409,11 +421,28 @@ struct MarketDetailView: View {
 
     private func valuesSection(_ market: MarketSnapshot) -> some View {
         CIQCard {
-            VStack(spacing: CIQSpacing.sm) {
-                CIQMetricRow("Raw", value: market.rawEstimatedValue.currencyFormatted)
-                CIQMetricRow("PSA 8", value: market.psa8EstimatedValue.currencyFormatted)
-                CIQMetricRow("PSA 9", value: market.psa9EstimatedValue.currencyFormatted)
-                CIQMetricRow("PSA 10", value: market.psa10EstimatedValue.currencyFormatted, valueColor: CIQColors.Fallback.accentPrimary)
+            VStack(alignment: .leading, spacing: CIQSpacing.sm) {
+                GradeLadderView(
+                    market: market,
+                    predictedGrade: ownedItem?.officialGrade == nil
+                        ? ownedItem?.gradingReport?.estimatedGrade
+                        : nil
+                )
+                if let item = ownedItem, let roi = GradeVerdict.compute(for: item) {
+                    HStack {
+                        VerdictChip(roi: roi)
+                        Spacer()
+                        NavigationLink {
+                            if let report = item.gradingReport, let snapshot = item.marketSnapshot {
+                                GradeROIView(card: card, report: report, market: snapshot)
+                            }
+                        } label: {
+                            Text("See the math")
+                                .font(CIQFont.caption)
+                                .foregroundStyle(CIQColors.Fallback.accentPrimary)
+                        }
+                    }
+                }
                 CIQDisclaimerView("Estimated values based on recent sales.")
             }
         }

@@ -56,6 +56,12 @@ struct GradeReportView: View {
         .sheet(isPresented: $showROI) {
             NavigationStack {
                 GradeROIView(card: card, report: report, market: market)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Close") { showROI = false }
+                                .foregroundStyle(CIQColors.Fallback.textSecondary)
+                        }
+                    }
             }
         }
         .sheet(item: $selectedDefect) { defect in

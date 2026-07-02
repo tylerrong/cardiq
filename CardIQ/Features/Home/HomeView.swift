@@ -64,13 +64,18 @@ struct HomeView: View {
         HStack(spacing: CIQSpacing.sm) {
             HStack(spacing: CIQSpacing.xs) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(CIQColors.Fallback.textTertiary)
-                TextField("Search any card — name, set, or number", text: $searchText)
-                    .focused($searchFocused)
-                    .autocorrectionDisabled()
-                    .submitLabel(.search)
-                    .foregroundStyle(CIQColors.Fallback.textPrimary)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(CIQColors.Fallback.accentPrimary)
+                TextField(
+                    "",
+                    text: $searchText,
+                    prompt: Text("Search any card — name, set, or number")
+                        .foregroundStyle(CIQColors.Fallback.textSecondary)
+                )
+                .focused($searchFocused)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+                .foregroundStyle(CIQColors.Fallback.textPrimary)
                 if !searchText.isEmpty {
                     Button {
                         searchText = ""
@@ -82,16 +87,24 @@ struct HomeView: View {
                 }
             }
             .padding(.horizontal, CIQSpacing.sm)
-            .padding(.vertical, CIQSpacing.xs + 2)
-            .background(CIQColors.Fallback.backgroundCard)
+            .padding(.vertical, CIQSpacing.sm)
+            .background(
+                RoundedRectangle(cornerRadius: CIQRadius.md)
+                    .fill(CIQColors.Fallback.backgroundCard)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CIQRadius.md)
+                            .fill(CIQColors.Fallback.accentPrimary.opacity(0.07))
+                    )
+            )
             .clipShape(RoundedRectangle(cornerRadius: CIQRadius.md))
             .overlay(
                 RoundedRectangle(cornerRadius: CIQRadius.md)
                     .strokeBorder(
-                        searchFocused ? CIQColors.Fallback.accentPrimary.opacity(0.4) : CIQColors.Fallback.borderSubtle,
-                        lineWidth: 1
+                        CIQColors.Fallback.accentPrimary.opacity(searchFocused ? 0.7 : 0.35),
+                        lineWidth: searchFocused ? 1.5 : 1
                     )
             )
+            .shadow(color: CIQColors.Fallback.accentPrimary.opacity(0.15), radius: 8, y: 2)
 
             if searchActive {
                 Button("Cancel") {

@@ -269,11 +269,13 @@ struct DefaultGradeROICalculator: GradeROICalculator {
             )
         }
 
+        // Tier labels follow the selected company's scale (BGS gem is 9.5).
+        let company = GradingCompanyProfile.named(input.gradingCompany) ?? .psa
         return [
             outcome(label: "Sell Raw", salePrice: marketSnapshot.rawEstimatedValue, probability: 1.0, includeGradingCost: false),
-            outcome(label: "PSA 8", salePrice: marketSnapshot.psa8EstimatedValue, probability: gradingReport.psa8Probability, includeGradingCost: true),
-            outcome(label: "PSA 9", salePrice: marketSnapshot.psa9EstimatedValue, probability: gradingReport.psa9Probability, includeGradingCost: true),
-            outcome(label: "PSA 10", salePrice: marketSnapshot.psa10EstimatedValue, probability: gradingReport.psa10Probability, includeGradingCost: true),
+            outcome(label: company.eightLabel, salePrice: marketSnapshot.psa8EstimatedValue, probability: gradingReport.psa8Probability, includeGradingCost: true),
+            outcome(label: company.nineLabel, salePrice: marketSnapshot.psa9EstimatedValue, probability: gradingReport.psa9Probability, includeGradingCost: true),
+            outcome(label: company.gemLabel, salePrice: marketSnapshot.psa10EstimatedValue, probability: gradingReport.psa10Probability, includeGradingCost: true),
         ]
     }
 }

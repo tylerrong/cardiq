@@ -22,6 +22,7 @@ struct GradeROIView: View {
         ScrollView {
             VStack(spacing: CIQSpacing.lg) {
                 recommendationHeader
+                companyComparisonSection
                 inputsSection
                 outcomesTable
                 expectedValueSection
@@ -36,12 +37,8 @@ struct GradeROIView: View {
         .navigationTitle("Grading ROI")
         .ciqInlineTitle()
         .ciqNavigationBarStyle()
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Close") { dismiss() }
-                    .foregroundStyle(CIQColors.Fallback.textSecondary)
-            }
-        }
+        // No Close button here: when pushed, the nav stack provides Back;
+        // when presented as a sheet, the presenter adds its own Close.
     }
 
     private var recommendationHeader: some View {
@@ -63,6 +60,66 @@ struct GradeROIView: View {
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                     .slideUp(delay: 0.6)
+            }
+        }
+    }
+
+    /// Where to send the card: every company's expected profit for this copy,
+    /// best first. Tapping a row re-runs the whole report for that company.
+    private var companyComparisonSection: some View {
+        CIQCard {
+            VStack(alignment: .leading, spacing: CIQSpacing.sm) {
+                Text("Where to Grade It")
+                    .font(CIQFont.headline)
+                    .foregroundStyle(CIQColors.Fallback.textPrimary)
+
+                ForEach(Array(viewModel.companyOutcomes.enumerated()), id: \.element.id) { index, outcome in
+                    let isSelected = viewModel.company == outcome.company
+                    Button {
+                        CIQHaptics.select()
+                        viewModel.company = outcome.company
+                    } label: {
+                        HStack(spacing: CIQSpacing.sm) {
+                            GradingCompanyBadge(company: outcome.company.displayName, height: 14)
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: CIQSpacing.xxs) {
+                                    Text(outcome.company.gemLabel)
+                                        .font(CIQFont.footnoteBold)
+                                        .foregroundStyle(CIQColors.Fallback.textPrimary)
+                                    if index == 0 {
+                                        Text("BEST")
+                                            .font(.system(size: 9, weight: .heavy))
+                                            .foregroundStyle(.black)
+                                            .padding(.horizontal, 5)
+                                            .padding(.vertical, 2)
+                                            .background(CIQColors.Fallback.accentPrimary)
+                                            .clipShape(Capsule())
+                                    }
+                                }
+                                Text("$\(Int(outcome.company.fee)) fee · ~\(outcome.company.turnaroundDays) days")
+                                    .font(CIQFont.caption)
+                                    .foregroundStyle(CIQColors.Fallback.textTertiary)
+                            }
+                            Spacer()
+                            Text(outcome.result.expectedProfit.signedCurrencyFormatted)
+                                .font(CIQFont.bodyBold)
+                                .foregroundStyle(outcome.result.expectedProfit >= 0 ? CIQColors.Fallback.positive : CIQColors.Fallback.negative)
+                        }
+                        .padding(CIQSpacing.sm)
+                        .background(isSelected ? CIQColors.Fallback.accentPrimary.opacity(0.08) : CIQColors.Fallback.backgroundTertiary.opacity(0.5))
+                        .clipShape(RoundedRectangle(cornerRadius: CIQRadius.sm))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: CIQRadius.sm)
+                                .strokeBorder(
+                                    isSelected ? CIQColors.Fallback.accentPrimary.opacity(0.6) : Color.clear,
+                                    lineWidth: 1
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                CIQDisclaimerView("Profits use each company's fee and typical resale premium for the predicted grade.")
             }
         }
     }
@@ -307,8 +364,18 @@ final class GradeROIViewModel {
     var input: ROIInput = .default {
         didSet { recalculate() }
     }
+    /// Selected grading company — swaps the fee and re-anchors graded values
+    /// to that company's typical market realization.
+    var company: GradingCompanyProfile = .psa {
+        didSet {
+            input.gradingCompany = company.displayName
+            input.gradingFee = company.fee
+        }
+    }
     var result: GradeROIResult
     var outcomes: [GradeOutcome]
+    /// Every company's expected economics for this card, best first.
+    var companyOutcomes: [CompanyGradingOutcome]
 
     private let report: GradingReport
     private let market: MarketSnapshot
@@ -319,11 +386,16 @@ final class GradeROIViewModel {
         self.market = market
         self.result = DefaultGradeROICalculator().calculate(gradingReport: report, marketSnapshot: market, input: .default)
         self.outcomes = DefaultGradeROICalculator().outcomes(gradingReport: report, marketSnapshot: market, input: .default)
+        self.companyOutcomes = GradingCompanyComparison.outcomes(report: report, market: market)
     }
 
     private func recalculate() {
-        result = calculator.calculate(gradingReport: report, marketSnapshot: market, input: input)
-        outcomes = calculator.outcomes(gradingReport: report, marketSnapshot: market, input: input)
+        let adjusted = company.adjusted(market)
+        result = calculator.calculate(gradingReport: report, marketSnapshot: adjusted, input: input)
+        outcomes = calculator.outcomes(gradingReport: report, marketSnapshot: adjusted, input: input)
+        companyOutcomes = GradingCompanyComparison.outcomes(
+            report: report, market: market, purchasePrice: input.purchasePrice
+        )
     }
 }
 
