@@ -51,31 +51,40 @@ actor CardCatalogStore {
 
     // MARK: - Search
 
-    /// Instant tokenized search over name / set / number, across both the
-    /// English and Japanese catalogs. Every token must match; name-prefix
-    /// matches rank first. (CJK sequences survive the tokenizer — they're
-    /// alphanumerics — so Japanese queries match Japanese names.)
+    /// Instant tokenized search over name / set / code / number / id, across
+    /// both the English and Japanese catalogs. Every token must match.
+    /// Ranking: name-prefix matches, then exact-phrase matches (so "236/187"
+    /// or "base1-4" surface the exact card before loose token hits), then the
+    /// rest. (CJK sequences survive the tokenizer — they're alphanumerics —
+    /// so Japanese queries match Japanese names.)
     func search(_ query: String, limit: Int = 50) -> [CardIdentity] {
         loadFromDiskIfNeeded()
-        let tokens = query.lowercased()
+        let phrase = query.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let tokens = phrase
             .components(separatedBy: CharacterSet.alphanumerics.inverted)
             .filter { !$0.isEmpty }
         guard !tokens.isEmpty else { return [] }
 
+        var idHits: [CardIdentity] = []
         var prefixHits: [CardIdentity] = []
+        var phraseHits: [CardIdentity] = []
         var containsHits: [CardIdentity] = []
         for (allCards, keys) in [(cards, searchKeys), (jaCards, jaSearchKeys)] {
             for (i, key) in keys.enumerated() {
                 guard tokens.allSatisfy({ key.contains($0) }) else { continue }
-                if allCards[i].name.lowercased().hasPrefix(tokens[0]) {
+                if allCards[i].id.lowercased() == phrase {
+                    idHits.append(allCards[i])
+                } else if allCards[i].name.lowercased().hasPrefix(tokens[0]) {
                     prefixHits.append(allCards[i])
+                } else if key.contains(phrase) {
+                    phraseHits.append(allCards[i])
                 } else {
                     containsHits.append(allCards[i])
                 }
                 if prefixHits.count >= limit { break }
             }
         }
-        return Array((prefixHits + containsHits).prefix(limit))
+        return Array((idHits + prefixHits + phraseHits + containsHits).prefix(limit))
     }
 
     /// Collector-number lookup ("NNN/NNN") for scan identification. Numeric
@@ -185,7 +194,7 @@ actor CardCatalogStore {
 
     private func apply(_ newCards: [CardIdentity], complete: Bool) {
         cards = newCards
-        searchKeys = newCards.map { "\($0.name) \($0.setName) \($0.setCode) \($0.cardNumber)".lowercased() }
+        searchKeys = newCards.map { "\($0.name) \($0.setName) \($0.setCode) \($0.cardNumber) \($0.id)".lowercased() }
         isComplete = complete
     }
 
@@ -217,7 +226,7 @@ actor CardCatalogStore {
         if let file = Self.loadBundledSeed(named: "card-catalog-seed-ja") {
             jaCards = file.cards
             jaSearchKeys = file.cards.map {
-                "\($0.name) \($0.variant ?? "") \($0.setName) \($0.setCode) \($0.cardNumber)".lowercased()
+                "\($0.name) \($0.variant ?? "") \($0.setName) \($0.setCode) \($0.cardNumber) \($0.id)".lowercased()
             }
         }
 
