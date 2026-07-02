@@ -17,6 +17,12 @@ actor CardCatalogStore {
     private var isDownloading = false
     private var loadedFromDisk = false
 
+    /// Japanese catalog (TCGdex) — bundled snapshot, loaded alongside the
+    /// English catalog. Kept separate so the English download/refresh
+    /// bookkeeping (page counts, deltas) stays untouched.
+    private var jaCards: [CardIdentity] = []
+    private var jaSearchKeys: [String] = []
+
     /// Some cards are available to search against (partial is fine — newest first).
     var isReady: Bool { !cards.isEmpty }
 
@@ -45,8 +51,10 @@ actor CardCatalogStore {
 
     // MARK: - Search
 
-    /// Instant tokenized search over name / set / number. Every token must match;
-    /// name-prefix matches rank first.
+    /// Instant tokenized search over name / set / number, across both the
+    /// English and Japanese catalogs. Every token must match; name-prefix
+    /// matches rank first. (CJK sequences survive the tokenizer — they're
+    /// alphanumerics — so Japanese queries match Japanese names.)
     func search(_ query: String, limit: Int = 50) -> [CardIdentity] {
         loadFromDiskIfNeeded()
         let tokens = query.lowercased()
@@ -56,16 +64,42 @@ actor CardCatalogStore {
 
         var prefixHits: [CardIdentity] = []
         var containsHits: [CardIdentity] = []
-        for (i, key) in searchKeys.enumerated() {
-            guard tokens.allSatisfy({ key.contains($0) }) else { continue }
-            if cards[i].name.lowercased().hasPrefix(tokens[0]) {
-                prefixHits.append(cards[i])
-            } else {
-                containsHits.append(cards[i])
+        for (allCards, keys) in [(cards, searchKeys), (jaCards, jaSearchKeys)] {
+            for (i, key) in keys.enumerated() {
+                guard tokens.allSatisfy({ key.contains($0) }) else { continue }
+                if allCards[i].name.lowercased().hasPrefix(tokens[0]) {
+                    prefixHits.append(allCards[i])
+                } else {
+                    containsHits.append(allCards[i])
+                }
+                if prefixHits.count >= limit { break }
             }
-            if prefixHits.count >= limit { break }
         }
         return Array((prefixHits + containsHits).prefix(limit))
+    }
+
+    /// Collector-number lookup ("NNN/NNN") for scan identification. Numeric
+    /// compare so OCR's "25/78" matches a zero-padded "025/078".
+    func searchByNumber(_ number: String, total: String, language: String? = nil) -> [CardIdentity] {
+        loadFromDiskIfNeeded()
+        guard let num = Int(number), let tot = Int(total) else { return [] }
+        let pools = language == "ja" ? [jaCards] : (language == "en" ? [cards] : [cards, jaCards])
+        var hits: [CardIdentity] = []
+        for pool in pools {
+            for card in pool {
+                let parts = card.cardNumber.split(separator: "/")
+                guard parts.count == 2, Int(parts[0]) == num, Int(parts[1]) == tot else { continue }
+                hits.append(card)
+            }
+        }
+        return hits
+    }
+
+    /// Identity lookup by catalog id, across both languages (used by pricing to
+    /// resolve name/set/number without a network hit).
+    func identity(for id: String) -> CardIdentity? {
+        loadFromDiskIfNeeded()
+        return cards.first { $0.id == id } ?? jaCards.first { $0.id == id }
     }
 
     /// Default browse feed: the newest cards in the catalog (stored newest-first).
@@ -177,7 +211,13 @@ actor CardCatalogStore {
         guard !loadedFromDisk else { return }
         loadedFromDisk = true
 
-        // Prefer the on-disk cache (has any post-install refreshes)...
+        // Japanese catalog: always served from the bundled snapshot.
+        if let file = Self.loadBundledSeed(named: "card-catalog-seed-ja") {
+            jaCards = file.cards
+            jaSearchKeys = file.cards.map { "\($0.name) \($0.setName) \($0.setCode) \($0.cardNumber)".lowercased() }
+        }
+
+        // English catalog: prefer the on-disk cache (has post-install refreshes)...
         if let url = cacheURL,
            let data = try? Data(contentsOf: url),
            let file = try? JSONDecoder().decode(CacheFile.self, from: data),
@@ -189,12 +229,17 @@ actor CardCatalogStore {
 
         // ...otherwise fall back to the snapshot bundled with the app, so the
         // full catalog is searchable immediately on first launch.
-        if let url = Bundle.main.url(forResource: "card-catalog-seed", withExtension: "json"),
-           let data = try? Data(contentsOf: url),
-           let file = try? JSONDecoder().decode(CacheFile.self, from: data) {
+        if let file = Self.loadBundledSeed(named: "card-catalog-seed") {
             apply(file.cards, complete: file.isComplete)
             lastRefreshed = file.lastRefreshed
         }
+    }
+
+    private static func loadBundledSeed(named name: String) -> CacheFile? {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "json"),
+              let data = try? Data(contentsOf: url)
+        else { return nil }
+        return try? JSONDecoder().decode(CacheFile.self, from: data)
     }
 
     private func saveToDisk() {

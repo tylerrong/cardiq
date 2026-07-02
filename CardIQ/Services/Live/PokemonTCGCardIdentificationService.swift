@@ -36,6 +36,15 @@ final class PokemonTCGCardIdentificationService: CardIdentificationService {
             throw CIQError.identificationFailed
         }
 
+        // Japanese card: the OCR'd name is kana/kanji. Route to the local
+        // Japanese catalog — the English catalog would otherwise "match" the
+        // collector number against an unrelated English set.
+        if CardTextHeuristics.containsJapanese(guess.name) || lines.contains(where: { CardTextHeuristics.containsJapanese($0.text) }) {
+            let jpMatches = await identifyJapanese(guess: guess)
+            if !jpMatches.isEmpty { return jpMatches }
+            // Fall through: script detection can misfire on holo glare.
+        }
+
         // The collector number "NNN/NNN" is the most reliable id — number + set total
         // pin the exact card. Fall back to the name only when the number isn't read.
         let matches: [CardIdentity]
@@ -47,6 +56,27 @@ final class PokemonTCGCardIdentificationService: CardIdentificationService {
 
         guard !matches.isEmpty else { throw CIQError.identificationFailed }
         return CardTextHeuristics.rank(matches, against: guess)
+    }
+
+    /// Japanese identification against the local TCGdex catalog: collector
+    /// number + printed total first (numeric compare handles zero-padding),
+    /// then a name search. Confidence mirrors the English heuristics — a
+    /// number match whose name also agrees is near-certain.
+    private func identifyJapanese(guess: CardTextHeuristics.Guess) async -> [CardIdentity] {
+        var matches: [CardIdentity] = []
+        if let number = guess.number, let total = guess.setTotal {
+            matches = await CardCatalogStore.shared.searchByNumber(number, total: total, language: "ja")
+        }
+        if matches.isEmpty, !guess.name.isEmpty {
+            matches = await CardCatalogStore.shared.search(guess.name).filter { $0.language == "ja" }
+        }
+        return matches.map { card in
+            var copy = card
+            let nameAgrees = !guess.name.isEmpty && (card.name.contains(guess.name) || guess.name.contains(card.name))
+            copy.identificationConfidence = nameAgrees ? 0.95 : 0.85
+            return copy
+        }
+        .sorted { $0.identificationConfidence > $1.identificationConfidence }
     }
 
     func search(query: String) async throws -> [CardIdentity] {
@@ -346,6 +376,10 @@ enum CardTextRecognizer {
             let request = VNRecognizeTextRequest()
             request.recognitionLevel = .accurate
             request.usesLanguageCorrection = false
+            // Read Japanese prints too — kana/kanji names route identification
+            // to the Japanese catalog.
+            request.automaticallyDetectsLanguage = true
+            request.recognitionLanguages = ["ja-JP", "en-US"]
 
             // Data-based handler applies the image's EXIF orientation. Photos from
             // the picker/camera are often rotated; a CGImage handler ignores that and
@@ -405,6 +439,15 @@ enum CardTextHeuristics {
             number: collector?.numerator,
             setTotal: collector?.total
         )
+    }
+
+    /// True when the text contains hiragana, katakana, or kanji — the signal
+    /// that a scanned card is a Japanese print.
+    static func containsJapanese(_ text: String) -> Bool {
+        text.unicodeScalars.contains { scalar in
+            (0x3040...0x30FF).contains(scalar.value) ||   // hiragana + katakana
+            (0x4E00...0x9FFF).contains(scalar.value)      // CJK unified ideographs
+        }
     }
 
     private static func isNameLike(_ text: String) -> Bool {

@@ -15,25 +15,60 @@ final class JustTCGMarketDataService: MarketDataService {
     }
 
     func snapshot(for cardId: String) async throws -> MarketSnapshot {
-        let card = try await catalog.card(id: cardId)
-        guard let variant = try await justTCG.bestVariant(name: card.name, set: card.set?.name, number: card.number) else {
+        let card = try await resolveIdentity(cardId)
+        guard let variant = try await justTCG.bestVariant(
+            name: card.name, set: card.setName, number: card.number, game: card.game
+        ) else {
             throw CIQError.marketDataUnavailable
         }
         return JustTCGSnapshotBuilder.snapshot(
             name: card.name,
             variant: variant,
-            imageURL: card.images?.large ?? card.images?.small
+            imageURL: card.imageURL
         )
     }
 
     func priceHistory(for cardId: String, range: TimeRange) async throws -> [PriceHistoryPoint] {
-        let card = try await catalog.card(id: cardId)
-        guard let variant = try await justTCG.bestVariant(name: card.name, set: card.set?.name, number: card.number) else {
+        let card = try await resolveIdentity(cardId)
+        guard let variant = try await justTCG.bestVariant(
+            name: card.name, set: card.setName, number: card.number, game: card.game
+        ) else {
             return []
         }
         return (variant.priceHistory ?? []).map {
             PriceHistoryPoint(date: Date(timeIntervalSince1970: $0.t), price: $0.p)
         }
+    }
+
+    /// What JustTCG needs to find a card, resolved from the local catalog when
+    /// possible (works for Japanese cards, whose ids the pokemontcg.io catalog
+    /// doesn't know), with a network lookup as the fallback.
+    private struct ResolvedCard {
+        var name: String
+        var setName: String?
+        var number: String?
+        var imageURL: String?
+        var game: String
+    }
+
+    private func resolveIdentity(_ cardId: String) async throws -> ResolvedCard {
+        if let local = await CardCatalogStore.shared.identity(for: cardId) {
+            return ResolvedCard(
+                name: local.name,
+                setName: local.setName,
+                number: local.cardNumber.split(separator: "/").first.map(String.init),
+                imageURL: local.imageURL,
+                game: local.language == "ja" ? "pokemon-japan" : "pokemon"
+            )
+        }
+        let card = try await catalog.card(id: cardId)
+        return ResolvedCard(
+            name: card.name,
+            setName: card.set?.name,
+            number: card.number,
+            imageURL: card.images?.large ?? card.images?.small,
+            game: "pokemon"
+        )
     }
 
     func trendingCards() async throws -> [CardIdentity] {
@@ -59,13 +94,13 @@ final class JustTCGClient {
     /// The name/set/number query below is a best-effort lookup pending verification
     /// with a live key — once a key is available, confirm the exact search params
     /// (or switch to a tcgplayerId mapping) against the live API.
-    func bestVariant(name: String, set: String?, number: String?) async throws -> JustTCGVariant? {
+    func bestVariant(name: String, set: String?, number: String?, game: String = "pokemon") async throws -> JustTCGVariant? {
         var comps = URLComponents(
             url: baseURL.appendingPathComponent("cards"),
             resolvingAgainstBaseURL: false
         )!
         var items = [
-            URLQueryItem(name: "game", value: "pokemon"),
+            URLQueryItem(name: "game", value: game),
             URLQueryItem(name: "name", value: name),
             URLQueryItem(name: "condition", value: "NM")
         ]
