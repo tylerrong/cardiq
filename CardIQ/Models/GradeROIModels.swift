@@ -74,13 +74,18 @@ struct ROIInput: Sendable {
     var sellingFeePercentage: Double
     var requiredMarginPercentage: Double
 
-    static let `default` = ROIInput(
-        purchasePrice: 0,
-        gradingCompany: "PSA",
-        gradingFee: 25,
-        shippingCost: 15,
-        insuranceCost: 5,
-        sellingFeePercentage: 13,
-        requiredMarginPercentage: 20
-    )
+    /// Baseline inputs, honoring the user's Grading Defaults from Profile
+    /// (falls back to PSA / $25 / $15 / 13% when unset).
+    static var `default`: ROIInput {
+        let defaults = UserDefaults.standard
+        return ROIInput(
+            purchasePrice: 0,
+            gradingCompany: defaults.string(forKey: "preferredGradingCompany") ?? "PSA",
+            gradingFee: defaults.object(forKey: "defaultGradingFee") as? Double ?? 25,
+            shippingCost: defaults.object(forKey: "defaultShippingCost") as? Double ?? 15,
+            insuranceCost: 5,
+            sellingFeePercentage: defaults.object(forKey: "defaultSellingFee") as? Double ?? 13,
+            requiredMarginPercentage: 20
+        )
+    }
 }

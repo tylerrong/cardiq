@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PaywallView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppState.self) private var appState
     @State private var selectedPlan: String = "collector_pro"
     @State private var billingPeriod: BillingPeriod = .yearly
     @State private var isPurchasing = false
@@ -109,7 +110,10 @@ struct PaywallView: View {
                 CIQPrimaryButton(isPurchasing ? "Processing..." : "Subscribe Now") {
                     isPurchasing = true
                     Task {
-                        try? await Task.sleep(for: .seconds(1))
+                        // Mock purchase until StoreKit lands — but a real state
+                        // change: the tier and scan allowance actually update.
+                        _ = try? await ServiceContainer.shared.subscription.purchase(planId: selectedPlan)
+                        await appState.refreshSubscription()
                         isPurchasing = false
                         dismiss()
                     }

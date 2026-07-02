@@ -19,11 +19,18 @@ struct ProfileView: View {
                 supportSection
                 dangerSection
                 aboutSection
+                // Clearance so the floating tab bar / Ask CardIQ button never
+                // covers the last rows.
+                Section {
+                    Color.clear.frame(height: 72)
+                        .listRowBackground(Color.clear)
+                }
             }
             .scrollContentBackground(.hidden)
             .background(CIQColors.Fallback.backgroundPrimary)
             .navigationTitle("Profile")
             .ciqNavigationBarStyle()
+            .task { await appState.refreshSubscription() }
             .sheet(isPresented: $showPaywall) { PaywallView() }
             .alert("Delete Account", isPresented: $showDeleteConfirmation) {
                 Button("Delete", role: .destructive) { Task { await appState.deleteAccount() } }
@@ -219,9 +226,9 @@ struct CIQExportFile: FileDocument {
 }
 
 struct NotificationSettingsView: View {
-    @State private var priceAlerts = true
-    @State private var gradingUpdates = true
-    @State private var marketNews = false
+    @AppStorage("notifyPriceAlerts") private var priceAlerts = true
+    @AppStorage("notifyGradingUpdates") private var gradingUpdates = true
+    @AppStorage("notifyMarketNews") private var marketNews = false
 
     var body: some View {
         List {
@@ -247,8 +254,8 @@ struct NotificationSettingsView: View {
 }
 
 struct PrivacySettingsView: View {
-    @State private var analyticsEnabled = false
-    @State private var imageRetention = true
+    @AppStorage("privacyAnalyticsEnabled") private var analyticsEnabled = false
+    @AppStorage("privacyImageRetention") private var imageRetention = true
 
     var body: some View {
         List {

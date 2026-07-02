@@ -39,20 +39,25 @@ struct ToastModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content.overlay(alignment: .top) {
-            if isPresented {
-                CIQToast(message: message, icon: icon, color: color)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .onAppear {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            withAnimation(.easeOut(duration: 0.3)) {
-                                isPresented = false
+            // The animation is scoped to this container — attaching it to
+            // `content` makes the ENTIRE screen animate through the toast's
+            // spring on every state change (views visibly collapse).
+            ZStack(alignment: .top) {
+                if isPresented {
+                    CIQToast(message: message, icon: icon, color: color)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .onAppear {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                withAnimation(.easeOut(duration: 0.3)) {
+                                    isPresented = false
+                                }
                             }
                         }
-                    }
-                    .padding(.top, CIQSpacing.xs)
+                        .padding(.top, CIQSpacing.xs)
+                }
             }
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isPresented)
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isPresented)
     }
 }
 

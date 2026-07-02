@@ -384,8 +384,15 @@ final class GradeROIViewModel {
     init(report: GradingReport, market: MarketSnapshot) {
         self.report = report
         self.market = market
-        self.result = DefaultGradeROICalculator().calculate(gradingReport: report, marketSnapshot: market, input: .default)
-        self.outcomes = DefaultGradeROICalculator().outcomes(gradingReport: report, marketSnapshot: market, input: .default)
+        // Start on the user's preferred company (Profile > Grading Defaults),
+        // with the graded values re-anchored to it.
+        let input = ROIInput.default
+        let company = GradingCompanyProfile.named(input.gradingCompany) ?? .psa
+        let adjusted = company.adjusted(market)
+        self.company = company
+        self.input = input
+        self.result = DefaultGradeROICalculator().calculate(gradingReport: report, marketSnapshot: adjusted, input: input)
+        self.outcomes = DefaultGradeROICalculator().outcomes(gradingReport: report, marketSnapshot: adjusted, input: input)
         self.companyOutcomes = GradingCompanyComparison.outcomes(report: report, market: market)
     }
 
