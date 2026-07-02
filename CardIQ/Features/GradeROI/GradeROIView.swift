@@ -37,12 +37,8 @@ struct GradeROIView: View {
         .navigationTitle("Grading ROI")
         .ciqInlineTitle()
         .ciqNavigationBarStyle()
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Close") { dismiss() }
-                    .foregroundStyle(CIQColors.Fallback.textSecondary)
-            }
-        }
+        // No Close button here: when pushed, the nav stack provides Back;
+        // when presented as a sheet, the presenter adds its own Close.
     }
 
     private var recommendationHeader: some View {
