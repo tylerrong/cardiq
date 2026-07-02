@@ -67,7 +67,11 @@ struct ScannerFlowView: View {
                             IdentificationView(
                                 results: viewModel.identificationResults,
                                 selectedCard: viewModel.selectedCard,
-                                onConfirm: { card in Task { await viewModel.confirmIdentification(card) } }
+                                onConfirm: { card in Task { await viewModel.confirmIdentification(card) } },
+                                confirmLabel: viewModel.scanMode.includesGrading && viewModel.backImage == nil
+                                    ? "Confirm & Scan Back"
+                                    : "Confirm This Card",
+                                onRetake: { viewModel.retakeFront() }
                             )
                         case .complete:
                             if let card = viewModel.selectedCard {
@@ -109,7 +113,13 @@ struct ScannerFlowView: View {
 
     private var scannerProgress: some View {
         VStack(spacing: CIQSpacing.xs) {
-            CIQProgressBar(value: viewModel.currentStep.progress(for: viewModel.scanMode), height: 4)
+            CIQProgressBar(
+                value: viewModel.currentStep.progress(
+                    for: viewModel.scanMode,
+                    identified: viewModel.selectedCard != nil
+                ),
+                height: 4
+            )
             Text(viewModel.currentStep.title)
                 .font(CIQFont.footnoteBold)
                 .foregroundStyle(CIQColors.Fallback.textSecondary)

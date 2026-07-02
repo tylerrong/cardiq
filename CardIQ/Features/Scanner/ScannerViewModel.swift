@@ -55,18 +55,49 @@ final class ScannerViewModel {
         advanceAfterFront()
     }
 
-    /// Front-only jumps straight to analysis; front+back continues to the back capture.
+    /// Identification runs right after the front is captured — for front+back
+    /// scans the user confirms the card BEFORE flipping it, so a misread front
+    /// never wastes a back capture.
     private func advanceAfterFront() {
-        if scanMode.includesGrading {
-            currentStep = .backCapture
-        } else {
-            startProcessing()
+        identifyFront()
+    }
+
+    private func identifyFront() {
+        Task {
+            currentStep = .processing
+            isProcessing = true
+            processingSteps = ProcessingStep.identifySteps
+            await animateSteps()
+
+            do {
+                guard let frontData = frontImage else {
+                    throw CIQError.poorImageQuality("Missing card image.")
+                }
+                let results = try await services.cardIdentification.identify(frontImage: frontData, backImage: nil)
+                guard !results.isEmpty else { throw CIQError.identificationFailed }
+                identificationResults = results
+                if let topMatch = results.first, topMatch.identificationConfidence >= 0.85 {
+                    selectedCard = topMatch
+                }
+                isProcessing = false
+                currentStep = .identificationConfirmation
+            } catch let e as CIQError {
+                error = e
+                isProcessing = false
+                currentStep = .error
+            } catch {
+                self.error = .unknown(error.localizedDescription)
+                isProcessing = false
+                currentStep = .error
+            }
         }
     }
 
     func retakeFront() {
         frontImage = nil
         frontQuality = nil
+        identificationResults = []
+        selectedCard = nil
         currentStep = .frontCapture
     }
 
@@ -106,8 +137,16 @@ final class ScannerViewModel {
         startProcessing()
     }
 
+    /// Runs the paid analysis (grading + market) once captures are done. The
+    /// card was already identified and confirmed after the front capture.
     func startProcessing() {
         Task {
+            guard let card = selectedCard else {
+                // Shouldn't happen — confirmation precedes the back capture —
+                // but recover by re-identifying rather than dead-ending.
+                identifyFront()
+                return
+            }
             let remaining = await services.subscription.remainingScans()
             if remaining <= 0 {
                 showPaywall = true
@@ -116,47 +155,43 @@ final class ScannerViewModel {
             currentStep = .processing
             isProcessing = true
             processingSteps = ProcessingStep.steps(for: scanMode)
-            await runAnalysis()
+            await animateSteps()
+            await finishAnalysis(card)
         }
     }
 
-    private func runAnalysis() async {
-        do {
-            for i in processingSteps.indices {
-                try await Task.sleep(for: .milliseconds(180))
-                processingSteps[i].status = .completed
-                if i + 1 < processingSteps.count {
-                    processingSteps[i + 1].status = .active
-                }
+    private func animateSteps() async {
+        for i in processingSteps.indices {
+            try? await Task.sleep(for: .milliseconds(180))
+            processingSteps[i].status = .completed
+            if i + 1 < processingSteps.count {
+                processingSteps[i + 1].status = .active
             }
-
-            guard let frontData = frontImage else {
-                throw CIQError.poorImageQuality("Missing card image.")
-            }
-
-            let results = try await services.cardIdentification.identify(frontImage: frontData, backImage: backImage)
-            guard !results.isEmpty else { throw CIQError.identificationFailed }
-            identificationResults = results
-
-            if let topMatch = results.first, topMatch.identificationConfidence >= 0.85 {
-                selectedCard = topMatch
-            }
-
-            isProcessing = false
-            currentStep = .identificationConfirmation
-        } catch let e as CIQError {
-            error = e
-            isProcessing = false
-            currentStep = .error
-        } catch {
-            self.error = .unknown(error.localizedDescription)
-            isProcessing = false
-            currentStep = .error
         }
     }
 
+    /// User confirmed the identified card. Front+back continues to the back
+    /// capture; front-only goes straight to the (paid) market analysis.
     func confirmIdentification(_ card: CardIdentity) async {
         selectedCard = card
+        if scanMode.includesGrading && backImage == nil {
+            currentStep = .backCapture
+            return
+        }
+
+        let remaining = await services.subscription.remainingScans()
+        if remaining <= 0 {
+            showPaywall = true
+            return
+        }
+        currentStep = .processing
+        isProcessing = true
+        processingSteps = ProcessingStep.steps(for: scanMode)
+        await animateSteps()
+        await finishAnalysis(card)
+    }
+
+    private func finishAnalysis(_ card: CardIdentity) async {
         currentStep = .processing
         isProcessing = true
 
@@ -281,7 +316,19 @@ struct ProcessingStep: Identifiable {
         .init(id: "market", label: "Finding market sales", icon: "chart.bar", status: .pending),
     ]
 
+    /// Identification pass right after the front capture (free, on-device).
+    static let identifySteps: [ProcessingStep] = [
+        .init(id: "quality", label: "Checking image quality", icon: "photo.badge.checkmark", status: .active),
+        .init(id: "identify", label: "Identifying card", icon: "magnifyingglass", status: .pending),
+    ]
+
+    /// Post-confirmation analysis: the card is already identified, so these
+    /// are the grading/market steps only.
     static func steps(for mode: ScanMode) -> [ProcessingStep] {
-        mode.includesGrading ? allSteps : frontOnlySteps
+        var steps = mode.includesGrading
+            ? Array(allSteps.dropFirst(2))          // centering → ROI
+            : Array(frontOnlySteps.dropFirst(2))    // market only
+        if !steps.isEmpty { steps[0].status = .active }
+        return steps
     }
 }
