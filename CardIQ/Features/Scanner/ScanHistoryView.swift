@@ -31,11 +31,14 @@ struct ScanHistoryView: View {
         .ciqInlineTitle()
         .ciqNavigationBarStyle()
         .sheet(item: $selectedScan) { scan in
-            if let card = scan.cardIdentity,
-               let report = scan.gradingReport,
-               let market = scan.marketSnapshot {
+            if let card = scan.cardIdentity {
                 NavigationStack {
-                    GradeReportView(card: card, report: report, market: market, onDismiss: { selectedScan = nil })
+                    if let report = scan.gradingReport, let market = scan.marketSnapshot {
+                        GradeReportView(card: card, report: report, market: market, onDismiss: { selectedScan = nil })
+                    } else {
+                        // Front-only scan — no grading report; show the raw result.
+                        RawValueResultView(card: card, market: scan.marketSnapshot, onDismiss: { selectedScan = nil })
+                    }
                 }
             }
         }
@@ -55,6 +58,10 @@ struct ScanHistoryRow: View {
                     Text(String(format: "%.1f", grade))
                         .font(CIQFont.footnoteBold)
                         .foregroundStyle(gradeColor(grade))
+                } else {
+                    Text("Raw")
+                        .font(CIQFont.captionBold)
+                        .foregroundStyle(CIQColors.Fallback.textTertiary)
                 }
             }
 

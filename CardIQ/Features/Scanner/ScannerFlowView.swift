@@ -679,33 +679,7 @@ struct ProcessingStepRow: View {
     }
 }
 
-struct ScanLaunchView: View {
-    @Environment(AppState.self) private var appState
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: CIQSpacing.lg) {
-                CIQPrimaryButton("Start New Scan", icon: "camera.fill") {
-                    appState.showScanner = true
-                }
-                .padding(.horizontal, CIQSpacing.md)
-                .padding(.top, CIQSpacing.md)
-
-                ScanHistoryView()
-            }
-            .background(CIQColors.Fallback.backgroundPrimary)
-            .navigationTitle("Scan")
-            .ciqNavigationBarStyle()
-        }
-    }
-}
-
 #Preview("Scanner Flow") {
     ScannerFlowView()
-        .environment(AppState())
-}
-
-#Preview("Scan Launch") {
-    ScanLaunchView()
         .environment(AppState())
 }
