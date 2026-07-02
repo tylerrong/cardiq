@@ -310,7 +310,7 @@ struct CaptureView: View {
                 CardAlignmentOverlay()
                 #endif
             }
-            .frame(width: 260, height: 364)
+            .frame(width: 320, height: 448)
             .clipShape(RoundedRectangle(cornerRadius: CIQRadius.lg))
             .overlay {
                 #if canImport(UIKit)
