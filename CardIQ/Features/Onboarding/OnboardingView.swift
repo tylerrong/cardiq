@@ -14,7 +14,7 @@ struct OnboardingView: View {
         OnboardingPage(icon: "chart.line.uptrend.xyaxis", title: "Track Your Collection", subtitle: "Monitor portfolio value, track gains, and manage your entire collection.", color: CIQColors.Fallback.accentPrimary),
     ]
 
-    private var totalPages: Int { pages.count + 2 }
+    private var totalPages: Int { pages.count + 1 }
 
     var body: some View {
         ZStack {
@@ -29,9 +29,6 @@ struct OnboardingView: View {
 
                     CollectorTypeSelectionView(selectedType: $selectedType)
                         .tag(pages.count)
-
-                    SignInView()
-                        .tag(pages.count + 1)
                 }
                 #if os(iOS)
                 .tabViewStyle(.page(indexDisplayMode: .never))
@@ -42,17 +39,11 @@ struct OnboardingView: View {
                     PageIndicator(current: currentPage, total: totalPages)
 
                     if currentPage == pages.count {
-                        CIQPrimaryButton("Continue") {
-                            if selectedType != nil {
-                                withAnimation { currentPage = pages.count + 1 }
-                            }
-                        }
-                        .opacity(selectedType == nil ? 0.5 : 1.0)
-                        .disabled(selectedType == nil)
-                    } else if currentPage == pages.count + 1 {
                         CIQPrimaryButton("Get Started", icon: "arrow.right") {
                             appState.completeOnboarding(type: selectedType ?? .casual)
                         }
+                        .opacity(selectedType == nil ? 0.5 : 1.0)
+                        .disabled(selectedType == nil)
 
                         Button("Skip for now") {
                             appState.completeOnboarding(type: selectedType ?? .casual)
@@ -184,53 +175,6 @@ struct CollectorTypeCard: View {
         }
         .accessibilityLabel("\(type.displayName). \(type.description)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-}
-
-struct SignInView: View {
-    var body: some View {
-        VStack(spacing: CIQSpacing.xl) {
-            Spacer()
-            Image(systemName: "person.crop.circle.fill")
-                .font(.system(size: 80, weight: .light))
-                .foregroundStyle(CIQColors.Fallback.accentPrimary)
-
-            VStack(spacing: CIQSpacing.sm) {
-                Text("Create Your Account")
-                    .font(CIQFont.displayMedium)
-                    .foregroundStyle(CIQColors.Fallback.textPrimary)
-                    .multilineTextAlignment(.center)
-
-                Text("Sign in to sync your collection across devices and back up your data.")
-                    .font(CIQFont.body)
-                    .foregroundStyle(CIQColors.Fallback.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, CIQSpacing.md)
-            }
-
-            Button {
-            } label: {
-                HStack(spacing: CIQSpacing.xs) {
-                    Image(systemName: "apple.logo")
-                        .font(.system(size: 18))
-                    Text("Sign in with Apple")
-                        .font(CIQFont.headline)
-                }
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, CIQSpacing.md)
-                .background(.black)
-                .clipShape(RoundedRectangle(cornerRadius: CIQRadius.button))
-                .overlay(
-                    RoundedRectangle(cornerRadius: CIQRadius.button)
-                        .strokeBorder(Color.white.opacity(0.3), lineWidth: 1)
-                )
-            }
-            .padding(.horizontal, CIQSpacing.xl)
-
-            Spacer()
-        }
-        .padding(CIQSpacing.xl)
     }
 }
 

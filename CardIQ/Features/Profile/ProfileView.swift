@@ -45,9 +45,16 @@ struct ProfileView: View {
                     Text(appState.currentUser.name)
                         .font(CIQFont.headline)
                         .foregroundStyle(CIQColors.Fallback.textPrimary)
+                    if !appState.currentUser.email.isEmpty {
+                        Text(appState.currentUser.email)
+                            .font(CIQFont.caption)
+                            .foregroundStyle(CIQColors.Fallback.textSecondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
                     Text(appState.currentUser.subscriptionTier.displayName)
                         .font(CIQFont.caption)
-                        .foregroundStyle(CIQColors.Fallback.textSecondary)
+                        .foregroundStyle(CIQColors.Fallback.textTertiary)
                 }
             }
         }

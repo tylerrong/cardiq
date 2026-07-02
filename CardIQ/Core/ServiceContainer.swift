@@ -14,6 +14,7 @@ final class ServiceContainer {
     let roiCalculator: any GradeROICalculator
     let marketChat: any MarketChatService
     let collectionRepository: any CollectionRepository
+    let scanRepository: any ScanRepository
 
     init(
         auth: any AuthenticationService = SupabaseManager.makeAuth(),
@@ -26,7 +27,8 @@ final class ServiceContainer {
         analytics: any AnalyticsService = MockAnalyticsService(),
         roiCalculator: any GradeROICalculator = DefaultGradeROICalculator(),
         marketChat: any MarketChatService = MockMarketChatService(),
-        collectionRepository: any CollectionRepository = SupabaseManager.makeCollectionRepository()
+        collectionRepository: any CollectionRepository = SupabaseManager.makeCollectionRepository(),
+        scanRepository: any ScanRepository = SupabaseManager.makeScanRepository()
     ) {
         self.auth = auth
         self.cardIdentification = cardIdentification
@@ -39,5 +41,6 @@ final class ServiceContainer {
         self.roiCalculator = roiCalculator
         self.marketChat = marketChat
         self.collectionRepository = collectionRepository
+        self.scanRepository = scanRepository
     }
 }

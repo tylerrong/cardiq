@@ -5,7 +5,7 @@ import SwiftData
 /// upsell to capture the back for full AI grading. No grading report is produced.
 struct RawValueResultView: View {
     let card: CardIdentity
-    let market: MarketSnapshot
+    let market: MarketSnapshot?
     var onScanBack: (() -> Void)?
     var onDismiss: (() -> Void)?
 
@@ -21,7 +21,7 @@ struct RawValueResultView: View {
                     identifiedHeader
                     rawValueCard
                         .slideUp(delay: 0.2)
-                    if !market.recentSales.isEmpty {
+                    if let market, !market.recentSales.isEmpty {
                         recentSalesCard
                             .slideUp(delay: 0.4)
                     }
@@ -92,17 +92,27 @@ struct RawValueResultView: View {
                     .foregroundStyle(CIQColors.Fallback.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                Text(market.rawEstimatedValue.currencyFormatted)
-                    .font(CIQFont.displayLarge)
-                    .foregroundStyle(CIQColors.Fallback.accentPrimary)
+                if let market {
+                    Text(market.rawEstimatedValue.currencyFormatted)
+                        .font(CIQFont.displayLarge)
+                        .foregroundStyle(CIQColors.Fallback.accentPrimary)
 
-                HStack(spacing: CIQSpacing.lg) {
-                    changeStat("30D", market.thirtyDayChangePercentage)
-                    changeStat("90D", market.ninetyDayChangePercentage)
-                    changeStat("1Y", market.oneYearChangePercentage)
+                    HStack(spacing: CIQSpacing.lg) {
+                        changeStat("30D", market.thirtyDayChangePercentage)
+                        changeStat("90D", market.ninetyDayChangePercentage)
+                        changeStat("1Y", market.oneYearChangePercentage)
+                    }
+
+                    CIQDisclaimerView("Ungraded estimate based on recent sales. Scan the back for grade-specific values.")
+                } else {
+                    Text("Price unavailable")
+                        .font(CIQFont.title)
+                        .foregroundStyle(CIQColors.Fallback.textTertiary)
+                    Text("The card was identified, but market data couldn't load right now. Pricing will refresh next time you view it.")
+                        .font(CIQFont.footnote)
+                        .foregroundStyle(CIQColors.Fallback.textSecondary)
+                        .multilineTextAlignment(.center)
                 }
-
-                CIQDisclaimerView("Ungraded estimate based on recent sales. Scan the back for grade-specific values.")
             }
         }
     }
@@ -127,7 +137,7 @@ struct RawValueResultView: View {
                     .font(CIQFont.headline)
                     .foregroundStyle(CIQColors.Fallback.textPrimary)
 
-                ForEach(market.recentSales.prefix(5)) { sale in
+                ForEach((market?.recentSales ?? []).prefix(5)) { sale in
                     HStack(spacing: CIQSpacing.sm) {
                         VStack(alignment: .leading, spacing: CIQSpacing.xxxs) {
                             Text(sale.title)
@@ -227,7 +237,7 @@ struct RawValueResultView: View {
         CardIQ: \(card.name)
         \(card.setName) · \(card.displayNumber)
 
-        Estimated Raw Value: \(market.rawEstimatedValue.currencyFormatted)
+        Estimated Raw Value: \(market?.rawEstimatedValue.currencyFormatted ?? "unavailable")
 
         ⚠️ AI estimate based on recent sales, not an official appraisal.
         """

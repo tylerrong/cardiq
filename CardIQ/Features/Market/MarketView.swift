@@ -7,6 +7,7 @@ struct MarketView: View {
     @State private var selectedTimeRange: TimeRange = .thirtyDays
     @State private var trendingCards: [CardIdentity] = []
     @State private var allCards: [CardIdentity] = []
+    @State private var isLoading = true
     @State private var showChat = false
     @Query(sort: \WatchlistItem.dateAdded, order: .reverse) private var watchlistItems: [WatchlistItem]
 
@@ -20,14 +21,22 @@ struct MarketView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: CIQSpacing.lg) {
-                    if searchText.isEmpty {
-                        if !watchlistItems.isEmpty {
-                            watchlistSection
+                    if isLoading && allCards.isEmpty {
+                        CIQLoadingView(message: "Loading market data...")
+                            .frame(maxWidth: .infinity, minHeight: 360)
+                    } else if allCards.isEmpty {
+                        marketUnavailable
+                    } else {
+                        if searchText.isEmpty {
+                            if !watchlistItems.isEmpty {
+                                watchlistSection
+                            }
+                            if !trendingCards.isEmpty {
+                                trendingSection
+                            }
                         }
-                        trendingSection
+                        allCardsSection
                     }
-
-                    allCardsSection
                     Color.clear.frame(height: 80)
                 }
                 .padding(CIQSpacing.md)
@@ -36,12 +45,36 @@ struct MarketView: View {
             .navigationTitle("Market")
             .ciqNavigationBarStyle()
             .searchable(text: $searchText, prompt: "Search cards...")
-            .task {
-                allCards = await ServiceContainer.shared.cardIdentification.allCards()
-                trendingCards = (try? await ServiceContainer.shared.marketData.trendingCards()) ?? []
-                CIQImageCache.shared.prefetchThumbnails(for: allCards + trendingCards)
-            }
+            .refreshable { await load() }
+            .task { await load() }
         }
+    }
+
+    private func load() async {
+        isLoading = true
+        allCards = await ServiceContainer.shared.cardIdentification.allCards()
+        trendingCards = (try? await ServiceContainer.shared.marketData.trendingCards()) ?? []
+        CIQImageCache.shared.prefetchThumbnails(for: allCards + trendingCards)
+        isLoading = false
+    }
+
+    private var marketUnavailable: some View {
+        VStack(spacing: CIQSpacing.md) {
+            Image(systemName: "chart.line.downtrend.xyaxis")
+                .font(.system(size: 48, weight: .light))
+                .foregroundStyle(CIQColors.Fallback.textTertiary)
+            Text("Market Unavailable")
+                .font(CIQFont.headline)
+                .foregroundStyle(CIQColors.Fallback.textPrimary)
+            Text("Couldn't load market data. Pull down to try again.")
+                .font(CIQFont.subheadline)
+                .foregroundStyle(CIQColors.Fallback.textSecondary)
+                .multilineTextAlignment(.center)
+            CIQSecondaryButton("Retry") { Task { await load() } }
+                .fixedSize()
+        }
+        .frame(maxWidth: .infinity, minHeight: 360)
+        .padding(.horizontal, CIQSpacing.xl)
     }
 
     private var watchlistSection: some View {
@@ -196,6 +229,7 @@ struct MarketDetailView: View {
     let card: CardIdentity
     @Environment(\.modelContext) private var modelContext
     @State private var market: MarketSnapshot?
+    @State private var marketUnavailable = false
     @State private var priceHistory: [PriceHistoryPoint] = []
     @State private var selectedTimeRange: TimeRange = .thirtyDays
     @State private var hideWeakComps = false
@@ -237,6 +271,12 @@ struct MarketDetailView: View {
                     volumeSection(market)
                     actionsSection
                     salesSection
+                } else if marketUnavailable {
+                    // No pricing source for this card (yet) — show the card
+                    // itself and keep watchlist/collection actions usable.
+                    cardSummarySection
+                    priceUnavailableSection
+                    actionsSection
                 } else {
                     CIQLoadingView(message: "Loading market data...")
                         .frame(maxWidth: .infinity)
@@ -265,6 +305,7 @@ struct MarketDetailView: View {
         .task {
             let service = ServiceContainer.shared.marketData
             market = await MarketSnapshotCache.shared.snapshot(for: card.id)
+            marketUnavailable = market == nil
             priceHistory = (try? await service.priceHistory(for: card.id, range: selectedTimeRange)) ?? []
             checkWatchlist()
         }
@@ -277,6 +318,45 @@ struct MarketDetailView: View {
             .presentationDetents([.medium])
         }
         .ciqToast(isPresented: $showWatchlistToast, message: watchlistToastMessage, icon: "bookmark.fill")
+    }
+
+    private var cardSummarySection: some View {
+        HStack(spacing: CIQSpacing.md) {
+            CardArtworkView(card: card, size: .large)
+            VStack(alignment: .leading, spacing: CIQSpacing.xxs) {
+                Text(card.name)
+                    .font(CIQFont.headline)
+                    .foregroundStyle(CIQColors.Fallback.textPrimary)
+                Text("\(card.setName) · \(card.displayNumber)")
+                    .font(CIQFont.subheadline)
+                    .foregroundStyle(CIQColors.Fallback.textSecondary)
+                if let variant = card.variant {
+                    Text(variant)
+                        .font(CIQFont.caption)
+                        .foregroundStyle(CIQColors.Fallback.textTertiary)
+                }
+            }
+            Spacer()
+        }
+    }
+
+    private var priceUnavailableSection: some View {
+        CIQCard {
+            VStack(spacing: CIQSpacing.sm) {
+                Image(systemName: "chart.line.downtrend.xyaxis")
+                    .font(.system(size: 32, weight: .light))
+                    .foregroundStyle(CIQColors.Fallback.textTertiary)
+                Text("Price Unavailable")
+                    .font(CIQFont.headline)
+                    .foregroundStyle(CIQColors.Fallback.textPrimary)
+                Text("No market pricing for this card yet. Add it to your watchlist and we'll track it once pricing is available.")
+                    .font(CIQFont.footnote)
+                    .foregroundStyle(CIQColors.Fallback.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, CIQSpacing.sm)
+        }
     }
 
     private var actionsSection: some View {

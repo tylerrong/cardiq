@@ -101,6 +101,48 @@ create policy "Collection items are deletable by owner"
     on public.collection_items for delete using (auth.uid() = user_id);
 
 -- =====================================================================
+-- scan_records: every scan a user runs (the grading dataset foundation).
+-- Stores the identified card, the model output, market snapshot, and the
+-- Storage paths of the captured images. predicted/reported grade columns
+-- back the future "I actually graded this" feedback loop.
+-- =====================================================================
+create table if not exists public.scan_records (
+    scan_id                text primary key,
+    user_id                uuid not null references auth.users (id) on delete cascade,
+    scan_mode              text,
+    card_identity          jsonb,
+    grading_report         jsonb,
+    market_snapshot        jsonb,
+    front_image_path       text,
+    back_image_path        text,
+    surface_image_path     text,
+    predicted_grade        double precision,
+    reported_grade         double precision,
+    reported_company       text,
+    allow_training_use     boolean not null default false,
+    created_at             timestamptz not null default now()
+);
+
+create index if not exists scan_records_user_id_idx
+    on public.scan_records (user_id, created_at desc);
+
+alter table public.scan_records enable row level security;
+
+drop policy if exists "Scan records are viewable by owner"  on public.scan_records;
+drop policy if exists "Scan records are insertable by owner" on public.scan_records;
+drop policy if exists "Scan records are updatable by owner"  on public.scan_records;
+drop policy if exists "Scan records are deletable by owner"  on public.scan_records;
+
+create policy "Scan records are viewable by owner"
+    on public.scan_records for select using (auth.uid() = user_id);
+create policy "Scan records are insertable by owner"
+    on public.scan_records for insert with check (auth.uid() = user_id);
+create policy "Scan records are updatable by owner"
+    on public.scan_records for update using (auth.uid() = user_id);
+create policy "Scan records are deletable by owner"
+    on public.scan_records for delete using (auth.uid() = user_id);
+
+-- =====================================================================
 -- Storage: private bucket for scanned card images, namespaced by user id
 -- Path convention: <auth.uid()>/<identifier>.jpg
 -- =====================================================================

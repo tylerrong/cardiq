@@ -70,14 +70,14 @@ struct ScannerFlowView: View {
                                 onConfirm: { card in Task { await viewModel.confirmIdentification(card) } }
                             )
                         case .complete:
-                            if let card = viewModel.selectedCard,
-                               let market = viewModel.marketSnapshot {
-                                if let report = viewModel.gradingReport {
+                            if let card = viewModel.selectedCard {
+                                if let report = viewModel.gradingReport,
+                                   let market = viewModel.marketSnapshot {
                                     GradeReportView(card: card, report: report, market: market, onDismiss: { dismiss() })
                                 } else {
                                     RawValueResultView(
                                         card: card,
-                                        market: market,
+                                        market: viewModel.marketSnapshot,
                                         onScanBack: { viewModel.upgradeToFullScan() },
                                         onDismiss: { dismiss() }
                                     )
@@ -679,33 +679,7 @@ struct ProcessingStepRow: View {
     }
 }
 
-struct ScanLaunchView: View {
-    @Environment(AppState.self) private var appState
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: CIQSpacing.lg) {
-                CIQPrimaryButton("Start New Scan", icon: "camera.fill") {
-                    appState.showScanner = true
-                }
-                .padding(.horizontal, CIQSpacing.md)
-                .padding(.top, CIQSpacing.md)
-
-                ScanHistoryView()
-            }
-            .background(CIQColors.Fallback.backgroundPrimary)
-            .navigationTitle("Scan")
-            .ciqNavigationBarStyle()
-        }
-    }
-}
-
 #Preview("Scanner Flow") {
     ScannerFlowView()
-        .environment(AppState())
-}
-
-#Preview("Scan Launch") {
-    ScanLaunchView()
         .environment(AppState())
 }

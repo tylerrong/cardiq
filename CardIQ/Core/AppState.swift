@@ -91,17 +91,15 @@ final class AppState {
 
 enum AppTab: Int, CaseIterable, Sendable {
     case home
-    case scan
     case collection
-    case market
+    case opportunities
     case profile
 
     var title: String {
         switch self {
         case .home: "Home"
-        case .scan: "Scan"
         case .collection: "Collection"
-        case .market: "Market"
+        case .opportunities: "Opportunities"
         case .profile: "Profile"
         }
     }
@@ -109,9 +107,8 @@ enum AppTab: Int, CaseIterable, Sendable {
     var icon: String {
         switch self {
         case .home: "house.fill"
-        case .scan: "viewfinder"
         case .collection: "square.stack.3d.up.fill"
-        case .market: "chart.line.uptrend.xyaxis"
+        case .opportunities: "scope"
         case .profile: "person.fill"
         }
     }

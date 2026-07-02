@@ -49,15 +49,19 @@ struct MainTabView: View {
             Group {
                 switch appState.selectedTab {
                 case .home: HomeView()
-                case .scan: ScanLaunchView()
                 case .collection: CollectionView()
-                case .market: MarketView()
+                case .opportunities: OpportunitiesView()
                 case .profile: ProfileView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            CIQTabBar(selectedTab: $state.selectedTab, onAskCardIQ: { showChat = true })
+            CIQTabBar(selectedTab: $state.selectedTab, onScan: { state.showScanner = true })
+        }
+        .overlay(alignment: .bottomTrailing) {
+            AskCardIQButton { showChat = true }
+                .padding(.trailing, CIQSpacing.lg)
+                .padding(.bottom, 104)
         }
         .ignoresSafeArea(.keyboard)
         #if os(iOS)
@@ -77,68 +81,91 @@ struct MainTabView: View {
 
 struct CIQTabBar: View {
     @Binding var selectedTab: AppTab
-    let onAskCardIQ: () -> Void
+    let onScan: () -> Void
 
-    private let navTabs: [AppTab] = [.home, .scan, .collection, .market, .profile]
+    private let leftTabs: [AppTab] = [.home, .collection]
+    private let rightTabs: [AppTab] = [.opportunities, .profile]
 
     var body: some View {
-        HStack(spacing: CIQSpacing.sm) {
-            HStack(spacing: 0) {
-                ForEach(navTabs, id: \.self) { tab in
-                    Button {
-                        CIQHaptics.select()
-                        selectedTab = tab
-                    } label: {
-                        Image(systemName: tabIcon(tab))
-                            .font(.system(size: 18, weight: selectedTab == tab ? .semibold : .regular))
-                            .foregroundStyle(selectedTab == tab ? CIQColors.Fallback.textPrimary : CIQColors.Fallback.textTertiary)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .accessibilityLabel(tab.title)
-                }
-            }
-            .padding(.horizontal, CIQSpacing.xs)
-            .padding(.vertical, CIQSpacing.xxs)
-            .background(.ultraThinMaterial)
-            .environment(\.colorScheme, .dark)
-            .clipShape(Capsule())
-            .overlay(
-                Capsule()
-                    .strokeBorder(CIQColors.Fallback.borderSubtle.opacity(0.5), lineWidth: 0.5)
-            )
-
-            Button {
-                CIQHaptics.tap()
-                onAskCardIQ()
-            } label: {
-                HStack(spacing: CIQSpacing.xs) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 15, weight: .semibold))
-                    Text("Ask CardIQ")
-                        .font(.system(size: 15, weight: .semibold))
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, CIQSpacing.lg)
-                .frame(minHeight: 48)
-                .background(CIQColors.Fallback.accentPrimary)
-                .clipShape(Capsule())
-            }
-            .buttonStyle(PressableButtonStyle())
-            .accessibilityLabel("Ask CardIQ")
+        HStack(spacing: 0) {
+            ForEach(leftTabs, id: \.self) { tabButton($0) }
+            scanButton
+            ForEach(rightTabs, id: \.self) { tabButton($0) }
         }
+        .padding(.horizontal, CIQSpacing.sm)
+        .padding(.top, CIQSpacing.xs)
+        .padding(.bottom, CIQSpacing.xxs)
+        .background(.ultraThinMaterial)
+        .environment(\.colorScheme, .dark)
+        .clipShape(RoundedRectangle(cornerRadius: CIQRadius.xl, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: CIQRadius.xl, style: .continuous)
+                .strokeBorder(CIQColors.Fallback.borderSubtle.opacity(0.5), lineWidth: 0.5)
+        )
         .padding(.horizontal, CIQSpacing.md)
         .padding(.bottom, CIQSpacing.xs)
     }
 
-    private func tabIcon(_ tab: AppTab) -> String {
-        switch tab {
-        case .home: "chart.line.uptrend.xyaxis"
-        case .scan: "viewfinder"
-        case .collection: "square.stack.3d.up.fill"
-        case .market: "tag"
-        case .profile: "person"
+    private func tabButton(_ tab: AppTab) -> some View {
+        let isSelected = selectedTab == tab
+        return Button {
+            CIQHaptics.select()
+            selectedTab = tab
+        } label: {
+            VStack(spacing: 3) {
+                Image(systemName: tab.icon)
+                    .font(.system(size: 19, weight: isSelected ? .semibold : .regular))
+                Text(tab.title)
+                    .font(.system(size: 10, weight: .medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .foregroundStyle(isSelected ? CIQColors.Fallback.accentPrimary : CIQColors.Fallback.textTertiary)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(Rectangle())
         }
+        .accessibilityLabel(tab.title)
+    }
+
+    private var scanButton: some View {
+        Button {
+            CIQHaptics.tap()
+            onScan()
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(CIQColors.Fallback.accentPrimary)
+                    .frame(width: 52, height: 52)
+                    .shadow(color: CIQColors.Fallback.accentPrimary.opacity(0.4), radius: 8, y: 2)
+                Image(systemName: "viewfinder")
+                    .font(.system(size: 23, weight: .semibold))
+                    .foregroundStyle(.black)
+            }
+        }
+        .frame(width: 72)
+        .accessibilityLabel("Scan a card")
+    }
+}
+
+/// Compact floating action button for the market chat assistant.
+struct AskCardIQButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            CIQHaptics.tap()
+            action()
+        } label: {
+            Image(systemName: "sparkles")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 52, height: 52)
+                .background(CIQColors.Fallback.accentPrimary)
+                .clipShape(Circle())
+                .shadow(color: .black.opacity(0.25), radius: 8, y: 3)
+        }
+        .buttonStyle(PressableButtonStyle())
+        .accessibilityLabel("Ask CardIQ")
     }
 }
 

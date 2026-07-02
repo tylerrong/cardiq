@@ -44,6 +44,12 @@ protocol CollectionRepository {
     func item(for id: String) async throws -> CollectionItem?
 }
 
+/// Persists a record of every scan (card, model output, image paths) — the
+/// foundation of the grading dataset.
+protocol ScanRepository {
+    func save(_ record: ScanCloudRecord) async throws
+}
+
 protocol SubscriptionService {
     func availablePlans() async throws -> [SubscriptionPlan]
     func currentTier() async -> SubscriptionTier
