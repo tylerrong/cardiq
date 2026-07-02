@@ -87,17 +87,53 @@ actor CardCatalogStore {
         return Array((idHits + prefixHits + phraseHits + containsHits).prefix(limit))
     }
 
-    /// Collector-number lookup ("NNN/NNN") for scan identification. Numeric
-    /// compare so OCR's "25/78" matches a zero-padded "025/078".
+    /// Collector-number lookup for scan identification. Normalized compare so
+    /// OCR's "25/78" matches a zero-padded "025/078", and letter-prefixed
+    /// numbers work (TG12/TG30 matches the stored "TG12/30").
     func searchByNumber(_ number: String, total: String, language: String? = nil) -> [CardIdentity] {
         loadFromDiskIfNeeded()
-        guard let num = Int(number), let tot = Int(total) else { return [] }
+        let pools = language == "ja" ? [jaCards] : (language == "en" ? [cards] : [cards, jaCards])
+        var hits: [CardIdentity] = []
+        for pool in pools {
+            for card in pool where CardTextHeuristics.numberMatches(cardNumber: card.cardNumber, numerator: number, total: total) {
+                hits.append(card)
+            }
+        }
+        return hits
+    }
+
+    /// Name match for scan identification: tolerant of OCR dropping spaces
+    /// ("UmbreonVMAx") and single-glyph confusions ("MewtwoYSTAR") via
+    /// squashed/fuzzy comparison.
+    func matchByName(_ rawName: String, language: String? = nil, limit: Int = 60) -> [CardIdentity] {
+        loadFromDiskIfNeeded()
+        let guess = CardTextHeuristics.squash(rawName)
+        guard guess.count >= 4 else { return [] }
         let pools = language == "ja" ? [jaCards] : (language == "en" ? [cards] : [cards, jaCards])
         var hits: [CardIdentity] = []
         for pool in pools {
             for card in pool {
-                let parts = card.cardNumber.split(separator: "/")
-                guard parts.count == 2, Int(parts[0]) == num, Int(parts[1]) == tot else { continue }
+                let name = CardTextHeuristics.squash(card.name)
+                guard name.count >= 3, CardTextHeuristics.namesSimilar(name, guess) else { continue }
+                hits.append(card)
+                if hits.count >= limit { return hits }
+            }
+        }
+        return hits
+    }
+
+    /// Numerator-only lookup for promo prints ("SWSH284" with no /total).
+    /// Requires a letter prefix — bare digits without a total are too ambiguous.
+    func searchByNumerator(_ numerator: String, language: String? = nil) -> [CardIdentity] {
+        loadFromDiskIfNeeded()
+        let norm = CardTextHeuristics.normalizedNumerator(numerator)
+        guard norm.contains(where: \.isLetter) else { return [] }
+        let pools = language == "ja" ? [jaCards] : (language == "en" ? [cards] : [cards, jaCards])
+        var hits: [CardIdentity] = []
+        for pool in pools {
+            for card in pool {
+                let cardNumerator = card.cardNumber.split(separator: "/").first.map(String.init) ?? card.cardNumber
+                guard CardTextHeuristics.normalizedNumerator(cardNumerator) == norm else { continue }
                 hits.append(card)
             }
         }

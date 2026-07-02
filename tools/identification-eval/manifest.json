@@ -1,0 +1,233 @@
+[
+ {
+  "id": "base1-4",
+  "lang": "en",
+  "name": "Charizard",
+  "cardNumber": "4/102",
+  "url": "https://images.pokemontcg.io/base1/4_hires.png"
+ },
+ {
+  "id": "base1-58",
+  "lang": "en",
+  "name": "Pikachu",
+  "cardNumber": "58/102",
+  "url": "https://images.pokemontcg.io/base1/58_hires.png"
+ },
+ {
+  "id": "base1-96",
+  "lang": "en",
+  "name": "Double Colorless Energy",
+  "cardNumber": "96/102",
+  "url": "https://images.pokemontcg.io/base1/96_hires.png"
+ },
+ {
+  "id": "neo1-9",
+  "lang": "en",
+  "name": "Lugia",
+  "cardNumber": "9/111",
+  "url": "https://images.pokemontcg.io/neo1/9_hires.png"
+ },
+ {
+  "id": "ecard1-146",
+  "lang": "en",
+  "name": "Pok\u00e9mon Reversal",
+  "cardNumber": "146/165",
+  "url": "https://images.pokemontcg.io/ecard1/146_hires.png"
+ },
+ {
+  "id": "ex14-100",
+  "lang": "en",
+  "name": "Celebi \u2605",
+  "cardNumber": "100/100",
+  "url": "https://images.pokemontcg.io/ex14/100_hires.png"
+ },
+ {
+  "id": "dp1-1",
+  "lang": "en",
+  "name": "Dialga",
+  "cardNumber": "1/130",
+  "url": "https://images.pokemontcg.io/dp1/1_hires.png"
+ },
+ {
+  "id": "pl1-1",
+  "lang": "en",
+  "name": "Ampharos",
+  "cardNumber": "1/127",
+  "url": "https://images.pokemontcg.io/pl1/1_hires.png"
+ },
+ {
+  "id": "hgss1-1",
+  "lang": "en",
+  "name": "Arcanine",
+  "cardNumber": "1/123",
+  "url": "https://images.pokemontcg.io/hgss1/1_hires.png"
+ },
+ {
+  "id": "bw1-1",
+  "lang": "en",
+  "name": "Snivy",
+  "cardNumber": "1/114",
+  "url": "https://images.pokemontcg.io/bw1/1_hires.png"
+ },
+ {
+  "id": "xy1-1",
+  "lang": "en",
+  "name": "Venusaur-EX",
+  "cardNumber": "1/146",
+  "url": "https://images.pokemontcg.io/xy1/1_hires.png"
+ },
+ {
+  "id": "xy12-11",
+  "lang": "en",
+  "name": "Charizard",
+  "cardNumber": "11/108",
+  "url": "https://images.pokemontcg.io/xy12/11_hires.png"
+ },
+ {
+  "id": "sm1-1",
+  "lang": "en",
+  "name": "Caterpie",
+  "cardNumber": "1/149",
+  "url": "https://images.pokemontcg.io/sm1/1_hires.png"
+ },
+ {
+  "id": "sm12-236",
+  "lang": "en",
+  "name": "Rosa",
+  "cardNumber": "236/236",
+  "url": "https://images.pokemontcg.io/sm12/236_hires.png"
+ },
+ {
+  "id": "swsh1-1",
+  "lang": "en",
+  "name": "Celebi V",
+  "cardNumber": "1/202",
+  "url": "https://images.pokemontcg.io/swsh1/1_hires.png"
+ },
+ {
+  "id": "swsh7-215",
+  "lang": "en",
+  "name": "Umbreon VMAX",
+  "cardNumber": "215/203",
+  "url": "https://images.pokemontcg.io/swsh7/215_hires.png"
+ },
+ {
+  "id": "swsh7-95",
+  "lang": "en",
+  "name": "Umbreon VMAX",
+  "cardNumber": "95/203",
+  "url": "https://images.pokemontcg.io/swsh7/95_hires.png"
+ },
+ {
+  "id": "swsh9tg-TG12",
+  "lang": "en",
+  "name": "Oranguru",
+  "cardNumber": "TG12/30",
+  "url": "https://images.pokemontcg.io/swsh9tg/TG12_hires.png"
+ },
+ {
+  "id": "swsh12pt5-160",
+  "lang": "en",
+  "name": "Pikachu",
+  "cardNumber": "160/159",
+  "url": "https://images.pokemontcg.io/swsh12pt5/160_hires.png"
+ },
+ {
+  "id": "swsh12pt5gg-GG44",
+  "lang": "en",
+  "name": "Mewtwo VSTAR",
+  "cardNumber": "GG44/70",
+  "url": "https://images.pokemontcg.io/swsh12pt5gg/GG44_hires.png"
+ },
+ {
+  "id": "swshp-SWSH284",
+  "lang": "en",
+  "name": "Galarian Moltres",
+  "cardNumber": "SWSH284/307",
+  "url": "https://images.pokemontcg.io/swshp/SWSH284_hires.png"
+ },
+ {
+  "id": "sv1-198",
+  "lang": "en",
+  "name": "Youngster",
+  "cardNumber": "198/198",
+  "url": "https://images.pokemontcg.io/sv1/198_hires.png"
+ },
+ {
+  "id": "sv3pt5-4",
+  "lang": "en",
+  "name": "Charmander",
+  "cardNumber": "4/165",
+  "url": "https://images.pokemontcg.io/sv3pt5/4_hires.png"
+ },
+ {
+  "id": "sv3pt5-205",
+  "lang": "en",
+  "name": "Mew ex",
+  "cardNumber": "205/165",
+  "url": "https://images.pokemontcg.io/sv3pt5/205_hires.png"
+ },
+ {
+  "id": "sv3-125",
+  "lang": "en",
+  "name": "Charizard ex",
+  "cardNumber": "125/197",
+  "url": "https://images.pokemontcg.io/sv3/125_hires.png"
+ },
+ {
+  "id": "sv8-247",
+  "lang": "en",
+  "name": "Pikachu ex",
+  "cardNumber": "247/191",
+  "url": "https://images.pokemontcg.io/sv8/247_hires.png"
+ },
+ {
+  "id": "sv8pt5-179",
+  "lang": "en",
+  "name": "Pikachu ex",
+  "cardNumber": "179/131",
+  "url": "https://images.pokemontcg.io/sv8pt5/179_hires.png"
+ },
+ {
+  "id": "sv8pt5-131",
+  "lang": "en",
+  "name": "Treasure Tracker",
+  "cardNumber": "131/131",
+  "url": "https://images.pokemontcg.io/sv8pt5/131_hires.png"
+ },
+ {
+  "id": "me4-122",
+  "lang": "en",
+  "name": "Mega Greninja ex",
+  "cardNumber": "122/86",
+  "url": "https://images.scrydex.com/pokemon/me4-122/large"
+ },
+ {
+  "id": "SV8a-236",
+  "lang": "ja",
+  "name": "Pikachu ex",
+  "cardNumber": "236/187",
+  "url": "https://assets.tcgdex.net/ja/SV/SV8a/236/high.png"
+ },
+ {
+  "id": "SV4a-055",
+  "lang": "ja",
+  "name": "Pikachu",
+  "cardNumber": "055/190",
+  "url": "https://assets.tcgdex.net/ja/SV/SV4a/055/high.png"
+ },
+ {
+  "id": "SV9-001",
+  "lang": "ja",
+  "name": "Caterpie",
+  "cardNumber": "001/100",
+  "url": "https://assets.tcgdex.net/ja/SV/SV9/001/high.png"
+ },
+ {
+  "id": "S12a-001",
+  "lang": "ja",
+  "name": "Paras",
+  "cardNumber": "001/172",
+  "url": "https://assets.tcgdex.net/ja/S/S12a/001/high.png"
+ }
+]
