@@ -66,66 +66,46 @@ struct HomeView: View {
         }
     }
 
+    /// Compact scan banner — the tab bar's center button is the primary scan
+    /// CTA now, so this is a slim secondary entry point with the explainer.
     private var scanHero: some View {
         Button {
             CIQHaptics.tap()
             appState.showScanner = true
         } label: {
             HStack(spacing: CIQSpacing.md) {
-                VStack(alignment: .leading, spacing: CIQSpacing.xs) {
+                Image(systemName: "viewfinder")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(.black)
+                    .frame(width: 44, height: 44)
+                    .background(CIQColors.Fallback.accentPrimary)
+                    .clipShape(RoundedRectangle(cornerRadius: CIQRadius.sm))
+
+                VStack(alignment: .leading, spacing: 2) {
                     Text("Scan & Grade")
-                        .font(CIQFont.title)
+                        .font(CIQFont.headline)
                         .foregroundStyle(CIQColors.Fallback.textPrimary)
                     Text("Identify condition, value, and grading upside.")
                         .font(CIQFont.footnote)
                         .foregroundStyle(CIQColors.Fallback.textSecondary)
-                        .lineLimit(2)
-
-                    HStack(spacing: CIQSpacing.xs) {
-                        Image(systemName: "viewfinder")
-                            .font(.system(size: 14, weight: .semibold))
-                        Text("Start Scan")
-                            .font(CIQFont.footnoteBold)
-                    }
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, CIQSpacing.md)
-                    .padding(.vertical, CIQSpacing.xs)
-                    .background(CIQColors.Fallback.accentPrimary)
-                    .clipShape(Capsule())
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                 }
 
                 Spacer()
 
-                ZStack {
-                    RoundedRectangle(cornerRadius: CIQRadius.sm)
-                        .strokeBorder(CIQColors.Fallback.accentPrimary.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
-                        .frame(width: 56, height: 78)
-
-                    Image(systemName: "viewfinder")
-                        .font(.system(size: 24, weight: .light))
-                        .foregroundStyle(CIQColors.Fallback.accentPrimary.opacity(0.5))
-                }
+                Image(systemName: "chevron.right")
+                    .font(CIQFont.caption)
+                    .foregroundStyle(CIQColors.Fallback.textTertiary)
             }
-            .padding(CIQSpacing.lg)
+            .padding(CIQSpacing.md)
             .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: CIQRadius.xl)
-                        .fill(CIQColors.Fallback.backgroundCard)
-                    RoundedRectangle(cornerRadius: CIQRadius.xl)
-                        .fill(
-                            LinearGradient(
-                                colors: [CIQColors.Fallback.accentPrimary.opacity(0.08), .clear],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            )
-                        )
-                    RoundedRectangle(cornerRadius: CIQRadius.xl)
-                        .strokeBorder(
-                            LinearGradient(
-                                colors: [CIQColors.Fallback.accentPrimary.opacity(0.3), CIQColors.Fallback.borderSubtle],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            ), lineWidth: 1
-                        )
-                }
+                RoundedRectangle(cornerRadius: CIQRadius.lg)
+                    .fill(CIQColors.Fallback.backgroundCard)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CIQRadius.lg)
+                            .strokeBorder(CIQColors.Fallback.accentPrimary.opacity(0.25), lineWidth: 1)
+                    )
             )
         }
         .buttonStyle(PressableButtonStyle())

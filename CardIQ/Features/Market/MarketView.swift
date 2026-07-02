@@ -7,6 +7,7 @@ struct MarketView: View {
     @State private var selectedTimeRange: TimeRange = .thirtyDays
     @State private var trendingCards: [CardIdentity] = []
     @State private var allCards: [CardIdentity] = []
+    @State private var isLoading = true
     @State private var showChat = false
     @Query(sort: \WatchlistItem.dateAdded, order: .reverse) private var watchlistItems: [WatchlistItem]
 
@@ -20,14 +21,22 @@ struct MarketView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: CIQSpacing.lg) {
-                    if searchText.isEmpty {
-                        if !watchlistItems.isEmpty {
-                            watchlistSection
+                    if isLoading && allCards.isEmpty {
+                        CIQLoadingView(message: "Loading market data...")
+                            .frame(maxWidth: .infinity, minHeight: 360)
+                    } else if allCards.isEmpty {
+                        marketUnavailable
+                    } else {
+                        if searchText.isEmpty {
+                            if !watchlistItems.isEmpty {
+                                watchlistSection
+                            }
+                            if !trendingCards.isEmpty {
+                                trendingSection
+                            }
                         }
-                        trendingSection
+                        allCardsSection
                     }
-
-                    allCardsSection
                     Color.clear.frame(height: 80)
                 }
                 .padding(CIQSpacing.md)
@@ -36,12 +45,36 @@ struct MarketView: View {
             .navigationTitle("Market")
             .ciqNavigationBarStyle()
             .searchable(text: $searchText, prompt: "Search cards...")
-            .task {
-                allCards = await ServiceContainer.shared.cardIdentification.allCards()
-                trendingCards = (try? await ServiceContainer.shared.marketData.trendingCards()) ?? []
-                CIQImageCache.shared.prefetchThumbnails(for: allCards + trendingCards)
-            }
+            .refreshable { await load() }
+            .task { await load() }
         }
+    }
+
+    private func load() async {
+        isLoading = true
+        allCards = await ServiceContainer.shared.cardIdentification.allCards()
+        trendingCards = (try? await ServiceContainer.shared.marketData.trendingCards()) ?? []
+        CIQImageCache.shared.prefetchThumbnails(for: allCards + trendingCards)
+        isLoading = false
+    }
+
+    private var marketUnavailable: some View {
+        VStack(spacing: CIQSpacing.md) {
+            Image(systemName: "chart.line.downtrend.xyaxis")
+                .font(.system(size: 48, weight: .light))
+                .foregroundStyle(CIQColors.Fallback.textTertiary)
+            Text("Market Unavailable")
+                .font(CIQFont.headline)
+                .foregroundStyle(CIQColors.Fallback.textPrimary)
+            Text("Couldn't load market data. Pull down to try again.")
+                .font(CIQFont.subheadline)
+                .foregroundStyle(CIQColors.Fallback.textSecondary)
+                .multilineTextAlignment(.center)
+            CIQSecondaryButton("Retry") { Task { await load() } }
+                .fixedSize()
+        }
+        .frame(maxWidth: .infinity, minHeight: 360)
+        .padding(.horizontal, CIQSpacing.xl)
     }
 
     private var watchlistSection: some View {

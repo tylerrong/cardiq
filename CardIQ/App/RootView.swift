@@ -133,13 +133,12 @@ struct CIQTabBar: View {
             ZStack {
                 Circle()
                     .fill(CIQColors.Fallback.accentPrimary)
-                    .frame(width: 56, height: 56)
+                    .frame(width: 52, height: 52)
                     .shadow(color: CIQColors.Fallback.accentPrimary.opacity(0.4), radius: 8, y: 2)
                 Image(systemName: "viewfinder")
-                    .font(.system(size: 24, weight: .semibold))
+                    .font(.system(size: 23, weight: .semibold))
                     .foregroundStyle(.black)
             }
-            .offset(y: -16)
         }
         .frame(width: 72)
         .accessibilityLabel("Scan a card")
