@@ -75,14 +75,15 @@ let enPool = loadSeed("\(repo)/CardIQ/Resources/card-catalog-seed.json")
 let jaPool = loadSeed("\(repo)/CardIQ/Resources/card-catalog-seed-ja.json")
 let manifest = try! JSONDecoder().decode(
     [ManifestEntry].self,
-    from: FileManager.default.contents(atPath: "/tmp/cardiq-eval/manifest.json")!
+    from: FileManager.default.contents(atPath: "\(ProcessInfo.processInfo.environment["EVAL_IMAGES"] ?? "/tmp/cardiq-eval")/manifest.json")!
 )
 
 var passed = 0, failed = 0
 var failures: [String] = []
 
 for entry in manifest {
-    let imagePath = "/tmp/cardiq-eval/\(entry.id.replacingOccurrences(of: "/", with: "_")).png"
+    let imagesDir = ProcessInfo.processInfo.environment["EVAL_IMAGES"] ?? "/tmp/cardiq-eval"
+    let imagePath = "\(imagesDir)/\(entry.id.replacingOccurrences(of: "/", with: "_")).png"
     guard let data = FileManager.default.contents(atPath: imagePath) else {
         print("MISSING image \(entry.id)"); continue
     }
@@ -107,14 +108,32 @@ for entry in manifest {
         maybeGuess = CardTextHeuristics.bestGuess(from: lines)
     }
 
+    if maybeGuess?.number == nil {
+        let stripFraction: CGFloat = 0.18
+        for variant in CardImagePreprocessor.bottomStripVariants(from: data, stripFraction: stripFraction) {
+            guard let stripLines = try? await CardTextRecognizer.recognize(in: variant),
+                  !stripLines.isEmpty else { continue }
+            let remapped = stripLines.map {
+                RecognizedLine(text: $0.text, midY: $0.midY * stripFraction, height: $0.height * stripFraction)
+            }
+            let merged = lines + remapped
+            let candidate = CardTextHeuristics.bestGuess(from: merged)
+            if candidate?.number != nil {
+                lines = merged
+                maybeGuess = candidate
+                break
+            }
+        }
+    }
+
     guard let guess = maybeGuess else {
         failed += 1
         failures.append("\(entry.id): no guess from OCR (lines: \(lines.count))")
         continue
     }
 
-    let isJapanese = CardTextHeuristics.containsJapanese(guess.name)
-        || lines.contains { CardTextHeuristics.containsJapanese($0.text) }
+    let japaneseLineCount = lines.count(where: { CardTextHeuristics.containsJapanese($0.text) })
+    let isJapanese = CardTextHeuristics.containsJapanese(guess.name) || japaneseLineCount >= 2
 
     var ranked: [CardIdentity] = []
     if isJapanese {

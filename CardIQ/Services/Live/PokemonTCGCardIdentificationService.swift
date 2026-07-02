@@ -2,6 +2,7 @@ import Foundation
 import Vision
 import ImageIO
 import CoreGraphics
+import CoreImage
 
 // MARK: - Live Card Identification (pokemontcg.io)
 
@@ -47,12 +48,38 @@ final class PokemonTCGCardIdentificationService: CardIdentificationService {
             guess = CardTextHeuristics.bestGuess(from: lines)
         }
 
+        // Still no number: the print is low-contrast (gold/white foil on dark
+        // art, underexposed photo). Re-OCR contrast-boosted and inverted
+        // variants of the bottom strip — inversion turns light-on-dark into
+        // the dark-on-light text OCR reads best.
+        if guess?.number == nil {
+            let stripFraction: CGFloat = 0.18
+            for variant in CardImagePreprocessor.bottomStripVariants(from: frontImage, stripFraction: stripFraction) {
+                guard let stripLines = try? await CardTextRecognizer.recognize(in: variant),
+                      !stripLines.isEmpty else { continue }
+                // Strip-space -> full-image space so position heuristics hold.
+                let remapped = stripLines.map {
+                    RecognizedLine(text: $0.text, midY: $0.midY * stripFraction, height: $0.height * stripFraction)
+                }
+                let merged = lines + remapped
+                let candidate = CardTextHeuristics.bestGuess(from: merged)
+                if candidate?.number != nil {
+                    lines = merged
+                    guess = candidate
+                    break
+                }
+            }
+        }
+
         guard let guess else { throw CIQError.identificationFailed }
 
         // Japanese card: the OCR'd name is kana/kanji. Route to the local
         // Japanese catalog — the English catalog would otherwise "match" the
-        // collector number against an unrelated English set.
-        if CardTextHeuristics.containsJapanese(guess.name) || lines.contains(where: { CardTextHeuristics.containsJapanese($0.text) }) {
+        // collector number against an unrelated English set. Require the kana
+        // signal in the name or in 2+ lines: OCR noise on a dark English photo
+        // can hallucinate a single CJK glyph.
+        let japaneseLineCount = lines.count(where: { CardTextHeuristics.containsJapanese($0.text) })
+        if CardTextHeuristics.containsJapanese(guess.name) || japaneseLineCount >= 2 {
             let jpMatches = await identifyJapanese(guess: guess)
             if !jpMatches.isEmpty { return jpMatches }
             // Fall through: script detection can misfire on holo glare.
@@ -390,6 +417,38 @@ enum PokemonTCGMapper {
     }
 }
 
+// MARK: - Image preprocessing for low-contrast collector numbers
+
+enum CardImagePreprocessor {
+    /// Bottom-strip crops tuned to recover low-contrast collector numbers
+    /// (gold/white foil on dark art, underexposed photos): upscaled 2x,
+    /// grayscale contrast-boosted, and an inverted variant that turns
+    /// light-on-dark print into the dark-on-light text OCR reads best.
+    static func bottomStripVariants(from data: Data, stripFraction: CGFloat = 0.18) -> [Data] {
+        guard let source = CIImage(data: data, options: [.applyOrientationProperty: true]) else { return [] }
+        let extent = source.extent
+        let strip = source
+            .cropped(to: CGRect(
+                x: extent.minX, y: extent.minY,
+                width: extent.width, height: extent.height * stripFraction
+            ))
+            .transformed(by: CGAffineTransform(scaleX: 2, y: 2))
+
+        let boosted = strip.applyingFilter("CIColorControls", parameters: [
+            kCIInputSaturationKey: 0.0,
+            kCIInputContrastKey: 1.7,
+            kCIInputBrightnessKey: 0.05,
+        ])
+        let inverted = boosted.applyingFilter("CIColorInvert")
+
+        let context = CIContext()
+        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+        return [boosted, inverted].compactMap { image in
+            context.pngRepresentation(of: image.cropped(to: image.extent), format: .RGBA8, colorSpace: colorSpace)
+        }
+    }
+}
+
 // MARK: - On-device OCR (Vision)
 
 struct RecognizedLine: Sendable {
@@ -468,8 +527,11 @@ enum CardTextHeuristics {
         var collector = candidates.first { digitsOnly($0.total).count >= 2 } ?? candidates.first
 
         // Promo prints have no "/total" — just a prefixed number ("SWSH284").
+        // Only trust the bottom half of the card: stat text at the top ("HP60")
+        // matches the same letters+digits shape.
         if collector == nil {
             collector = lines
+                .filter { $0.midY < 0.5 }
                 .sorted { $0.midY < $1.midY }
                 .compactMap { promoNumber(in: $0.text) }
                 .first
@@ -505,7 +567,11 @@ enum CardTextHeuristics {
         let range = NSRange(text.startIndex..., in: text)
         guard let match = regex.firstMatch(in: text, range: range),
               let r = Range(match.range(at: 1), in: text) else { return nil }
-        return String(text[r])
+        let value = String(text[r])
+        // Card-stat tokens that share the letters+digits shape.
+        let prefix = value.prefix { $0.isLetter }
+        if ["HP", "LV", "NO"].contains(String(prefix)) { return nil }
+        return value
     }
 
     /// True when the text contains hiragana, katakana, or kanji — the signal
