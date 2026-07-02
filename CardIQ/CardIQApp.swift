@@ -14,6 +14,12 @@ struct CardIQApp: App {
             memoryCapacity: 50 * 1024 * 1024,    // 50 MB in memory
             diskCapacity: 500 * 1024 * 1024      // 500 MB on disk
         )
+
+        // Warm the local card catalog (disk cache first, then a background
+        // download of the full database) so Find Card / browse are instant.
+        Task.detached(priority: .utility) {
+            await CardCatalogStore.shared.bootstrap()
+        }
     }
 
     var sharedModelContainer: ModelContainer = {

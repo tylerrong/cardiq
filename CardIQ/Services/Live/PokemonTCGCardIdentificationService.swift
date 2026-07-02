@@ -52,12 +52,22 @@ final class PokemonTCGCardIdentificationService: CardIdentificationService {
     func search(query: String) async throws -> [CardIdentity] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
+
+        // Local catalog first: instant, no rate limits. While the download is
+        // still in progress (newest sets land first), a local miss falls back to
+        // the live API so older cards remain findable.
+        let local = await CardCatalogStore.shared.search(trimmed)
+        if !local.isEmpty { return local }
+        if await CardCatalogStore.shared.hasFullCatalog { return [] }
         return try await client.searchCards(name: trimmed, number: nil)
     }
 
     func allCards() async -> [CardIdentity] {
-        // Default browse feed: recent high-interest Scarlet & Violet chase cards.
-        (try? await client.searchRaw(query: "(set.id:sv6 OR set.id:sv7 OR set.id:sv8) rarity:\"Special Illustration Rare\"", pageSize: 30)) ?? []
+        // Browse feed: newest cards from the local catalog; live fallback while
+        // the catalog is still downloading.
+        let local = await CardCatalogStore.shared.browse()
+        if !local.isEmpty { return local }
+        return (try? await client.searchRaw(query: "(set.id:sv6 OR set.id:sv7 OR set.id:sv8) rarity:\"Special Illustration Rare\"", pageSize: 30)) ?? []
     }
 }
 
@@ -129,6 +139,33 @@ final class PokemonTCGClient {
         }
     }
 
+    /// Fetches one page of the full catalog (newest sets first), trimmed to the
+    /// fields the app needs. Returns the page plus the API's total card count so
+    /// the caller knows when the download is complete.
+    func fetchCatalogPage(page: Int, pageSize: Int) async throws -> ([CardIdentity], Int) {
+        var comps = URLComponents(
+            url: baseURL.appendingPathComponent("cards"),
+            resolvingAgainstBaseURL: false
+        )!
+        comps.queryItems = [
+            URLQueryItem(name: "page", value: String(page)),
+            URLQueryItem(name: "pageSize", value: String(pageSize)),
+            URLQueryItem(name: "orderBy", value: "-set.releaseDate"),
+            URLQueryItem(name: "select", value: "id,name,number,rarity,images,set")
+        ]
+
+        var request = URLRequest(url: comps.url!)
+        request.timeoutInterval = 30
+        if let apiKey { request.setValue(apiKey, forHTTPHeaderField: "X-Api-Key") }
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw CIQError.networkTimeout
+        }
+        let decoded = try JSONDecoder().decode(PokemonTCGSearchResponse.self, from: data)
+        return (decoded.data.map(PokemonTCGMapper.cardIdentity(from:)), decoded.totalCount ?? decoded.data.count)
+    }
+
     /// Fetches a single card (with embedded price data) by its catalog id.
     func card(id: String) async throws -> PokemonTCGCard {
         let url = baseURL.appendingPathComponent("cards").appendingPathComponent(id)
@@ -171,6 +208,7 @@ final class PokemonTCGClient {
 
 struct PokemonTCGSearchResponse: Decodable {
     let data: [PokemonTCGCard]
+    let totalCount: Int?
 }
 
 struct PokemonTCGCardResponse: Decodable {

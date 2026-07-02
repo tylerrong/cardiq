@@ -12,6 +12,7 @@ struct AddCardView: View {
     @State private var notes = ""
     @State private var quantity = 1
     @State private var isSaving = false
+    @State private var isSearching = false
     @State private var searchTask: Task<Void, Never>?
 
     private let service: any CardIdentificationService = ServiceContainer.shared.cardIdentification
@@ -24,10 +25,12 @@ struct AddCardView: View {
                     .onChange(of: searchText) { _, query in
                         searchTask?.cancel()
                         searchTask = Task {
-                            try? await Task.sleep(for: .milliseconds(300))
+                            try? await Task.sleep(for: .milliseconds(200))
                             if Task.isCancelled { return }
                             if query.count >= 2 {
+                                isSearching = true
                                 searchResults = (try? await service.search(query: query)) ?? []
+                                isSearching = false
                             } else if query.isEmpty {
                                 searchResults = await service.allCards()
                             }
@@ -60,6 +63,20 @@ struct AddCardView: View {
                 }
 
                 if selectedCard == nil {
+                    if isSearching && searchResults.isEmpty {
+                        HStack(spacing: CIQSpacing.sm) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Searching...")
+                                .font(CIQFont.footnote)
+                                .foregroundStyle(CIQColors.Fallback.textSecondary)
+                        }
+                    } else if !isSearching && searchResults.isEmpty && searchText.count >= 2 {
+                        Text("No cards found for \"\(searchText)\"")
+                            .font(CIQFont.footnote)
+                            .foregroundStyle(CIQColors.Fallback.textSecondary)
+                    }
+
                     ForEach(searchResults) { card in
                         Button {
                             selectedCard = card
