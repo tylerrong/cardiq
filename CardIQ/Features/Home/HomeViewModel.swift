@@ -14,6 +14,20 @@ struct HomeMover: Identifiable {
     }
 }
 
+/// A collection card worth grading, paired with its real predicted report
+/// (from the scan or add flow) so the rail doesn't re-derive it.
+struct HomeGradingCandidate: Identifiable {
+    var id: String { card.id }
+    let card: CardIdentity
+    let report: GradingReport
+}
+
+struct HomeRecentCard: Identifiable {
+    var id: String { card.id }
+    let card: CardIdentity
+    let report: GradingReport?
+}
+
 @Observable
 @MainActor
 final class HomeViewModel {
@@ -21,8 +35,8 @@ final class HomeViewModel {
     var totalInvested: Double = 0
     var unrealizedGainLoss: Double = 0
     var freeScansRemaining: Int = 3
-    var recommendedForGrading: [CardIdentity] = []
-    var recentScans: [CardIdentity] = []
+    var recommendedForGrading: [HomeGradingCandidate] = []
+    var recentScans: [HomeRecentCard] = []
     var biggestMovers: [HomeMover] = []
 
     var collectorType: CollectorType?
@@ -56,20 +70,18 @@ final class HomeViewModel {
         loadFromCollection(modelContext: modelContext)
     }
 
+    /// Everything on Home derives from the user's real collection. An empty
+    /// collection means an empty (honest) dashboard — the sections hide and
+    /// the scan CTA carries the screen. No demo data.
     private func loadFromCollection(modelContext: ModelContext) {
         let descriptor = FetchDescriptor<CollectionItem>(sortBy: [SortDescriptor(\.dateAdded, order: .reverse)])
         let items = (try? modelContext.fetch(descriptor)) ?? []
 
-        if items.isEmpty {
-            loadFallbackData()
-            return
-        }
-
         var totalVal = 0.0
         var totalInv = 0.0
         var movers: [HomeMover] = []
-        var recent: [CardIdentity] = []
-        var gradeRecommendations: [CardIdentity] = []
+        var recent: [HomeRecentCard] = []
+        var gradeRecommendations: [HomeGradingCandidate] = []
 
         for item in items {
             totalVal += item.currentValue
@@ -79,7 +91,7 @@ final class HomeViewModel {
 
             if let card = item.cardIdentity {
                 if recent.count < 5 {
-                    recent.append(card)
+                    recent.append(HomeRecentCard(card: card, report: item.gradingReport))
                 }
 
                 if let market = item.marketSnapshot {
@@ -92,7 +104,7 @@ final class HomeViewModel {
 
                 if item.officialGrade == nil, let report = item.gradingReport {
                     if report.psa10Probability >= 0.2 || report.psa9Probability >= 0.4 {
-                        gradeRecommendations.append(card)
+                        gradeRecommendations.append(HomeGradingCandidate(card: card, report: report))
                     }
                 }
             }
@@ -105,47 +117,5 @@ final class HomeViewModel {
         recentScans = recent
         biggestMovers = movers.sorted { abs($0.change) > abs($1.change) }.prefix(4).map { $0 }
         recommendedForGrading = Array(gradeRecommendations.prefix(5))
-
-        if recommendedForGrading.isEmpty {
-            recommendedForGrading = [MockSeedData.cards[0], MockSeedData.cards[1], MockSeedData.cards[3]]
-        }
-    }
-
-    private func loadFallbackData() {
-        let items = MockSeedData.sampleCollectionItems
-        var totalVal = 0.0
-        var totalInv = 0.0
-
-        for item in items {
-            let market = MockSeedData.marketSnapshot(for: item.card.id)
-            let value: Double
-            if let grade = item.grade {
-                switch grade {
-                case 10: value = market.psa10EstimatedValue
-                case 9...9.5: value = market.psa9EstimatedValue
-                case 8...8.5: value = market.psa8EstimatedValue
-                default: value = market.rawEstimatedValue
-                }
-            } else {
-                value = market.rawEstimatedValue
-            }
-            totalVal += value
-            if let purchase = item.purchase {
-                totalInv += purchase
-            }
-        }
-
-        totalValue = totalVal
-        totalInvested = totalInv
-        unrealizedGainLoss = totalVal - totalInv
-
-        recommendedForGrading = [MockSeedData.cards[0], MockSeedData.cards[1], MockSeedData.cards[3]]
-        recentScans = Array(MockSeedData.cards.prefix(4))
-        biggestMovers = [
-            HomeMover(card: MockSeedData.cards[3], currentValue: 95.0, change: 15.0),
-            HomeMover(card: MockSeedData.cards[11], currentValue: 110.0, change: 12.0),
-            HomeMover(card: MockSeedData.cards[0], currentValue: 185.0, change: 5.2),
-            HomeMover(card: MockSeedData.cards[2], currentValue: 55.0, change: -8.0),
-        ]
     }
 }

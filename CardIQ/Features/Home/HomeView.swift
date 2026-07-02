@@ -6,37 +6,166 @@ struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = HomeViewModel()
 
+    // Universal card search — the market front door. Searches the full local
+    // catalog (EN + JP) as you type; results open the card's market page.
+    @State private var searchText = ""
+    @State private var searchResults: [CardIdentity] = []
+    @State private var isSearching = false
+    @State private var searchTask: Task<Void, Never>?
+    @FocusState private var searchFocused: Bool
+
+    private var searchActive: Bool { searchFocused || !searchText.isEmpty }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: CIQSpacing.xl) {
-                    headerSection
-                    scanHero
-                    portfolioStrip
-                    if !viewModel.recommendedForGrading.isEmpty {
-                        gradingOpportunities
+                    if !searchActive {
+                        headerSection
                     }
-                    if !viewModel.biggestMovers.isEmpty {
-                        moversSection
-                    }
-                    if !viewModel.recentScans.isEmpty {
-                        recentScansSection
+                    searchBar
+                    if searchActive {
+                        searchResultsSection
+                    } else {
+                        scanHero
+                        portfolioStrip
+                        if !viewModel.recommendedForGrading.isEmpty {
+                            gradingOpportunities
+                        }
+                        if !viewModel.biggestMovers.isEmpty {
+                            moversSection
+                        }
+                        if !viewModel.recentScans.isEmpty {
+                            recentScansSection
+                        }
                     }
                     Color.clear.frame(height: 80)
                 }
                 .padding(.horizontal, CIQSpacing.md)
             }
+            .scrollDismissesKeyboard(.immediately)
             .background(CIQColors.Fallback.backgroundPrimary)
             .navigationTitle("CardIQ")
             .ciqNavigationBarStyle()
             .navigationDestination(for: CardIdentity.self) { card in
                 MarketDetailView(card: card)
             }
+            .animation(.easeInOut(duration: 0.2), value: searchActive)
         }
         .task {
             viewModel.collectorType = appState.collectorType
             await viewModel.load(modelContext: modelContext)
         }
+    }
+
+    // MARK: - Search
+
+    private var searchBar: some View {
+        HStack(spacing: CIQSpacing.sm) {
+            HStack(spacing: CIQSpacing.xs) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(CIQColors.Fallback.textTertiary)
+                TextField("Search any card — name, set, or number", text: $searchText)
+                    .focused($searchFocused)
+                    .autocorrectionDisabled()
+                    .submitLabel(.search)
+                    .foregroundStyle(CIQColors.Fallback.textPrimary)
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                        searchResults = []
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(CIQColors.Fallback.textTertiary)
+                    }
+                }
+            }
+            .padding(.horizontal, CIQSpacing.sm)
+            .padding(.vertical, CIQSpacing.xs + 2)
+            .background(CIQColors.Fallback.backgroundCard)
+            .clipShape(RoundedRectangle(cornerRadius: CIQRadius.md))
+            .overlay(
+                RoundedRectangle(cornerRadius: CIQRadius.md)
+                    .strokeBorder(
+                        searchFocused ? CIQColors.Fallback.accentPrimary.opacity(0.4) : CIQColors.Fallback.borderSubtle,
+                        lineWidth: 1
+                    )
+            )
+
+            if searchActive {
+                Button("Cancel") {
+                    searchText = ""
+                    searchResults = []
+                    searchFocused = false
+                }
+                .font(CIQFont.subheadline)
+                .foregroundStyle(CIQColors.Fallback.accentPrimary)
+            }
+        }
+        .onChange(of: searchText) { _, query in
+            searchTask?.cancel()
+            searchTask = Task {
+                try? await Task.sleep(for: .milliseconds(200))
+                if Task.isCancelled { return }
+                guard query.count >= 2 else {
+                    searchResults = []
+                    return
+                }
+                isSearching = true
+                searchResults = (try? await ServiceContainer.shared.cardIdentification.search(query: query)) ?? []
+                isSearching = false
+                CIQImageCache.shared.prefetchThumbnails(for: searchResults)
+            }
+        }
+    }
+
+    private var searchResultsSection: some View {
+        VStack(alignment: .leading, spacing: CIQSpacing.sm) {
+            if searchText.count < 2 {
+                searchHint(icon: "sparkle.magnifyingglass",
+                           title: "Search the whole market",
+                           subtitle: "Every English and Japanese card — try a name, set, or collector number like 4/102.")
+            } else if isSearching && searchResults.isEmpty {
+                HStack(spacing: CIQSpacing.sm) {
+                    ProgressView().controlSize(.small)
+                    Text("Searching...")
+                        .font(CIQFont.footnote)
+                        .foregroundStyle(CIQColors.Fallback.textSecondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.top, CIQSpacing.xl)
+            } else if searchResults.isEmpty {
+                searchHint(icon: "magnifyingglass",
+                           title: "No cards found",
+                           subtitle: "Nothing matches \"\(searchText)\". Check the spelling or try the set name.")
+            } else {
+                ForEach(searchResults) { card in
+                    NavigationLink(value: card) {
+                        MarketCardRow(card: card)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func searchHint(icon: String, title: String, subtitle: String) -> some View {
+        VStack(spacing: CIQSpacing.sm) {
+            Image(systemName: icon)
+                .font(.system(size: 36, weight: .light))
+                .foregroundStyle(CIQColors.Fallback.textTertiary)
+            Text(title)
+                .font(CIQFont.headline)
+                .foregroundStyle(CIQColors.Fallback.textPrimary)
+            Text(subtitle)
+                .font(CIQFont.footnote)
+                .foregroundStyle(CIQColors.Fallback.textSecondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, CIQSpacing.xxl)
+        .padding(.horizontal, CIQSpacing.xl)
     }
 
     private var headerSection: some View {
@@ -169,9 +298,9 @@ struct HomeView: View {
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: CIQSpacing.sm) {
-                    ForEach(viewModel.recommendedForGrading) { card in
-                        NavigationLink(value: card) {
-                            GradingOpportunityCard(card: card)
+                    ForEach(viewModel.recommendedForGrading) { candidate in
+                        NavigationLink(value: candidate.card) {
+                            GradingOpportunityCard(card: candidate.card, report: candidate.report)
                         }
                         .buttonStyle(.plain)
                     }
@@ -209,9 +338,9 @@ struct HomeView: View {
                         .foregroundStyle(CIQColors.Fallback.accentPrimary)
                 }
             }
-            ForEach(viewModel.recentScans.prefix(3)) { scan in
-                NavigationLink(value: scan) {
-                    RecentScanRow(card: scan)
+            ForEach(viewModel.recentScans.prefix(3)) { recent in
+                NavigationLink(value: recent.card) {
+                    RecentScanRow(card: recent.card, report: recent.report)
                 }
                 .buttonStyle(.plain)
             }
@@ -223,12 +352,12 @@ struct HomeView: View {
 
 struct GradingOpportunityCard: View {
     let card: CardIdentity
-    @State private var report: GradingReport?
+    let report: GradingReport
     @State private var market: MarketSnapshot?
 
     private var upside: Double {
-        guard let r = report, let m = market else { return 0 }
-        return (r.psa10Probability * m.psa10EstimatedValue + r.psa9Probability * m.psa9EstimatedValue) - m.rawEstimatedValue
+        guard let m = market else { return 0 }
+        return (report.psa10Probability * m.psa10EstimatedValue + report.psa9Probability * m.psa9EstimatedValue) - m.rawEstimatedValue
     }
 
     var body: some View {
@@ -240,14 +369,12 @@ struct GradingOpportunityCard: View {
                 .foregroundStyle(CIQColors.Fallback.textPrimary)
                 .lineLimit(1)
 
-            if let report {
-                Text("Likely \(report.gradeDescriptor)")
-                    .font(CIQFont.caption)
-                    .foregroundStyle(CIQColors.Fallback.textSecondary)
-                Text("\(Int(report.psa10Probability * 100))% PSA 10")
-                    .font(CIQFont.captionBold)
-                    .foregroundStyle(CIQColors.Fallback.accentPrimary)
-            }
+            Text("Likely \(report.gradeDescriptor)")
+                .font(CIQFont.caption)
+                .foregroundStyle(CIQColors.Fallback.textSecondary)
+            Text("\(Int(report.psa10Probability * 100))% PSA 10")
+                .font(CIQFont.captionBold)
+                .foregroundStyle(CIQColors.Fallback.accentPrimary)
 
             if upside > 0 {
                 Text("+\(upside.currencyFormatted) upside")
@@ -257,14 +384,12 @@ struct GradingOpportunityCard: View {
         }
         .frame(width: 150)
         .task {
-            report = MockSeedData.gradingReport(for: card.id)
             market = await MarketSnapshotCache.shared.snapshot(for: card.id)
         }
     }
 
     private var gradeText: String? {
-        guard let r = report else { return nil }
-        return String(format: "%.1f", r.estimatedGrade)
+        String(format: "%.1f", report.estimatedGrade)
     }
 }
 
@@ -272,7 +397,7 @@ struct GradingOpportunityCard: View {
 
 struct RecentScanRow: View {
     let card: CardIdentity
-    @State private var report: GradingReport?
+    var report: GradingReport?
 
     var body: some View {
         HStack(spacing: CIQSpacing.sm) {
@@ -298,7 +423,6 @@ struct RecentScanRow: View {
                 .foregroundStyle(CIQColors.Fallback.textTertiary)
         }
         .padding(CIQSpacing.sm)
-        .task { report = MockSeedData.gradingReport(for: card.id) }
     }
 }
 
