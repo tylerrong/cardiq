@@ -32,6 +32,8 @@ final class SupabaseImageStorageService: ImageStorageService {
         guard let session = try? await client.auth.session else {
             throw SupabaseServiceError.notAuthenticated
         }
-        return "\(session.user.id.uuidString)/\(identifier).jpg"
+        // Lowercased: the storage RLS policy compares the folder against
+        // auth.uid()::text (lowercase), but Swift's uuidString is uppercase.
+        return "\(session.user.id.uuidString.lowercased())/\(identifier).jpg"
     }
 }

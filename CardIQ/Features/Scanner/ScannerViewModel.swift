@@ -175,10 +175,36 @@ final class ScannerViewModel {
                 )
             }
 
-            let market = try await services.marketData.snapshot(for: card.id)
+            // Market data is a flaky external dependency — fetch best-effort so an
+            // outage never loses the scan (which we still want in the dataset).
+            let market: MarketSnapshot?
+            let marketError: Error?
+            do {
+                market = try await services.marketData.snapshot(for: card.id)
+                marketError = nil
+            } catch {
+                market = nil
+                marketError = error
+            }
             marketSnapshot = market
 
+            // Upload the captured images + persist the scan to the cloud (dataset +
+            // cross-device history), regardless of whether market data loaded.
+            ScanSync.record(
+                mode: scanMode,
+                card: card,
+                report: gradingReport,
+                market: market,
+                front: frontImage,
+                back: backImage,
+                surface: surfaceImage
+            )
+
             try await services.subscription.consumeScan()
+
+            guard market != nil else {
+                throw marketError ?? CIQError.unknown("Market data could not be loaded.")
+            }
 
             isProcessing = false
             currentStep = .complete

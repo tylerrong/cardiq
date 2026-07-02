@@ -60,6 +60,10 @@ enum SupabaseManager {
     static func makeCollectionRepository() -> any CollectionRepository {
         client.map { SupabaseCollectionRepository(client: $0) } ?? MockCollectionRepository()
     }
+
+    static func makeScanRepository() -> any ScanRepository {
+        client.map { SupabaseScanRepository(client: $0) } ?? MockScanRepository()
+    }
 }
 
 /// Session storage backed by UserDefaults. Reliable across signed/unsigned
