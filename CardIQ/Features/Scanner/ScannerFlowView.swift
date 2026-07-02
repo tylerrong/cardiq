@@ -70,14 +70,14 @@ struct ScannerFlowView: View {
                                 onConfirm: { card in Task { await viewModel.confirmIdentification(card) } }
                             )
                         case .complete:
-                            if let card = viewModel.selectedCard,
-                               let market = viewModel.marketSnapshot {
-                                if let report = viewModel.gradingReport {
+                            if let card = viewModel.selectedCard {
+                                if let report = viewModel.gradingReport,
+                                   let market = viewModel.marketSnapshot {
                                     GradeReportView(card: card, report: report, market: market, onDismiss: { dismiss() })
                                 } else {
                                     RawValueResultView(
                                         card: card,
-                                        market: market,
+                                        market: viewModel.marketSnapshot,
                                         onScanBack: { viewModel.upgradeToFullScan() },
                                         onDismiss: { dismiss() }
                                     )

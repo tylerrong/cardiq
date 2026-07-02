@@ -221,9 +221,13 @@ struct HomeView: View {
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(CIQColors.Fallback.textPrimary)
                 Spacer()
-                Button("See All") { appState.selectedTab = .scan }
-                    .font(CIQFont.subheadline)
-                    .foregroundStyle(CIQColors.Fallback.accentPrimary)
+                NavigationLink {
+                    ScanHistoryView()
+                } label: {
+                    Text("See All")
+                        .font(CIQFont.subheadline)
+                        .foregroundStyle(CIQColors.Fallback.accentPrimary)
+                }
             }
             ForEach(viewModel.recentScans.prefix(3)) { scan in
                 NavigationLink(value: scan) {
