@@ -285,10 +285,27 @@ struct CaptureView: View {
             ZStack {
                 #if canImport(UIKit)
                 CameraPreview(session: camera.session)
+                if camera.cameraUnavailable {
+                    VStack(spacing: CIQSpacing.sm) {
+                        Image(systemName: "video.slash")
+                            .font(.system(size: 32, weight: .light))
+                            .foregroundStyle(CIQColors.Fallback.textTertiary)
+                        Text("Camera Unavailable")
+                            .font(CIQFont.footnoteBold)
+                            .foregroundStyle(CIQColors.Fallback.textPrimary)
+                        Text("Use Import below to add a photo of the card instead.")
+                            .font(CIQFont.caption)
+                            .foregroundStyle(CIQColors.Fallback.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, CIQSpacing.lg)
+                    }
+                } else {
+                    CardAlignmentOverlay()
+                }
                 #else
                 Color.black
-                #endif
                 CardAlignmentOverlay()
+                #endif
             }
             .frame(width: 260, height: 364)
             .clipShape(RoundedRectangle(cornerRadius: CIQRadius.lg))
@@ -308,7 +325,9 @@ struct CaptureView: View {
                 .padding(.horizontal, CIQSpacing.xxl)
 
             #if canImport(UIKit)
-            CIQBadge(text: detectionText, color: detectionColor)
+            if !camera.cameraUnavailable {
+                CIQBadge(text: detectionText, color: detectionColor)
+            }
             #endif
 
             Spacer()
@@ -380,6 +399,9 @@ struct CaptureView: View {
             camera.onCapture = { data in
                 showFlash = false
                 onCapture(data)
+            }
+            camera.onCaptureFailed = {
+                showFlash = false
             }
             camera.start()
         }

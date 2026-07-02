@@ -25,9 +25,15 @@ final class CardCameraController: NSObject, ObservableObject, @unchecked Sendabl
     @Published var detection: CardDetection = .searching
     @Published var authorized = AVCaptureDevice.authorizationStatus(for: .video) == .authorized
     @Published var torchOn = false
+    /// No usable camera: simulator, permission denied, or hardware in use.
+    /// The scan UI shows an "import instead" state and the shutter no-ops.
+    @Published var cameraUnavailable = false
 
     /// Set by the view; called (on main) with the cropped card image when captured.
     var onCapture: ((Data) -> Void)?
+    /// Called (on main) when a capture attempt can't produce a photo, so the
+    /// view can unwind capture-in-progress UI (e.g. the flash overlay).
+    var onCaptureFailed: (() -> Void)?
     private var configured = false
     private var captureDevice: AVCaptureDevice?
 
@@ -35,7 +41,10 @@ final class CardCameraController: NSObject, ObservableObject, @unchecked Sendabl
         AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
             guard let self else { return }
             DispatchQueue.main.async { self.authorized = granted }
-            guard granted else { return }
+            guard granted else {
+                DispatchQueue.main.async { self.cameraUnavailable = true }
+                return
+            }
             self.queue.async {
                 self.configureIfNeeded()
                 if !self.session.isRunning { self.session.startRunning() }
@@ -74,7 +83,19 @@ final class CardCameraController: NSObject, ObservableObject, @unchecked Sendabl
     /// Manual shutter — capture and crop to the detected card.
     func capture() {
         queue.async { [weak self] in
-            guard let self, self.configured else { return }
+            guard let self else { return }
+            // capturePhoto throws an unrecoverable ObjC exception when the
+            // session has no live video connection (simulator, permission
+            // denied, session interrupted) — bail out instead of crashing.
+            guard self.configured,
+                  let connection = self.photoOutput.connection(with: .video),
+                  connection.isEnabled, connection.isActive else {
+                DispatchQueue.main.async { [weak self] in
+                    self?.cameraUnavailable = true
+                    self?.onCaptureFailed?()
+                }
+                return
+            }
             self.photoOutput.capturePhoto(with: AVCapturePhotoSettings(), delegate: self)
         }
     }
@@ -89,6 +110,8 @@ final class CardCameraController: NSObject, ObservableObject, @unchecked Sendabl
            session.canAddInput(input) {
             session.addInput(input)
             captureDevice = device
+        } else {
+            DispatchQueue.main.async { [weak self] in self?.cameraUnavailable = true }
         }
         if session.canAddOutput(photoOutput) { session.addOutput(photoOutput) }
 
@@ -142,7 +165,11 @@ extension CardCameraController: AVCapturePhotoCaptureDelegate {
         didFinishProcessingPhoto photo: AVCapturePhoto,
         error: Error?
     ) {
-        guard let data = photo.fileDataRepresentation() else { return }
+        guard error == nil, let data = photo.fileDataRepresentation() else {
+            let failure = onCaptureFailed
+            DispatchQueue.main.async { failure?() }
+            return
+        }
         let result = croppedToCard(data) ?? data
         let completion = onCapture
         DispatchQueue.main.async { completion?(result) }
