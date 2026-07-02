@@ -94,8 +94,15 @@ final class PokemonTCGCardIdentificationService: CardIdentificationService {
         } else if let number = guess.number {
             matches = await CardCatalogStore.shared.searchByNumerator(number, language: "en")
         }
-        if matches.isEmpty, !guess.name.isEmpty {
-            matches = await CardCatalogStore.shared.matchByName(guess.name, language: "en")
+        // A number match that contradicts the OCR'd name is suspect — OCR can
+        // drop a digit ("111/110" read as "11/110" matches a different, real
+        // card). Merge in name-based candidates and let scoring decide: a
+        // name-exact match outranks a number match with a disagreeing name.
+        if !guess.name.isEmpty,
+           matches.isEmpty || matches.allSatisfy({ !CardTextHeuristics.namesAgree($0.name, guess.name) }) {
+            let byName = await CardCatalogStore.shared.matchByName(guess.name, language: "en")
+            let known = Set(matches.map(\.id))
+            matches += byName.filter { !known.contains($0.id) }
         }
         if matches.isEmpty {
             if let number = guess.number, let total = guess.setTotal {
@@ -589,10 +596,16 @@ enum CardTextHeuristics {
         return text.filter { $0.isLetter }.count >= 3
     }
 
-    /// Cleans OCR noise from a name: "Charizard@X" -> "Charizard ex", strips symbols.
+    /// Cleans OCR noise from a name: "Charizard@X" -> "Charizard ex", strips
+    /// symbols and HP-stat contamination ("Mew 50 HP" -> "Mew").
     private static func cleanName(_ raw: String) -> String {
         var s = raw.replacingOccurrences(of: "@X", with: " ex")
                    .replacingOccurrences(of: "@x", with: " ex")
+        s = s.replacingOccurrences(
+            of: "\\b\\d{1,3}\\s*HP\\b|\\bHP\\s*\\d{1,3}\\b",
+            with: "",
+            options: [.regularExpression, .caseInsensitive]
+        )
         s = String(s.filter { $0.isLetter || $0.isNumber || $0 == " " || $0 == "'" })
         return s.replacingOccurrences(of: "  ", with: " ").trimmingCharacters(in: .whitespaces)
     }
@@ -748,6 +761,14 @@ enum CardTextHeuristics {
         if let number = guess.number,
            normalizedNumerator(String(card.cardNumber.split(separator: "/").first ?? "")) == normalizedNumerator(number) {
             score += 0.1
+        }
+        // The printed set total pins the set even when the numerator was
+        // misread — "Mew ?/110" is the Holon Phantoms Mew, not a POP Series one.
+        if let total = guess.setTotal,
+           let cardTotal = card.cardNumber.split(separator: "/").last.map(String.init),
+           !digitsOnly(cardTotal).isEmpty,
+           Int(digitsOnly(cardTotal)) == Int(digitsOnly(total)) {
+            score += 0.05
         }
         if let yearAgrees {
             score += yearAgrees ? 0.05 : -0.1

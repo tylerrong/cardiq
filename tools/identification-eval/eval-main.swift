@@ -31,15 +31,19 @@ func matchByNumberNumeric(_ number: String, _ total: String, pool: [CardIdentity
 // Mirrors CardCatalogStore.matchByName (squashed/fuzzy compare).
 func matchByName(_ rawName: String, pool: [CardIdentity], limit: Int = 60) -> [CardIdentity] {
     let guess = CardTextHeuristics.squash(rawName)
-    guard guess.count >= 4 else { return [] }
+    guard guess.count >= 3 else { return [] }
+    var exactHits: [CardIdentity] = []
     var hits: [CardIdentity] = []
     for card in pool {
         let name = CardTextHeuristics.squash(card.name)
-        guard name.count >= 3, CardTextHeuristics.namesSimilar(name, guess) else { continue }
-        hits.append(card)
-        if hits.count >= limit { break }
+        guard name.count >= 3 else { continue }
+        if name == guess {
+            exactHits.append(card)
+        } else if hits.count < limit, CardTextHeuristics.namesSimilar(name, guess) {
+            hits.append(card)
+        }
     }
-    return hits
+    return exactHits + hits
 }
 
 // Mirrors CardCatalogStore.searchByNumerator (promo prints, no /total).
@@ -153,8 +157,11 @@ for entry in manifest {
         } else if let n = guess.number {
             matches = matchByNumerator(n, pool: enPool)
         }
-        if matches.isEmpty {
-            matches = matchByName(guess.name, pool: enPool)
+        if !guess.name.isEmpty,
+           matches.isEmpty || matches.allSatisfy({ !CardTextHeuristics.namesAgree($0.name, guess.name) }) {
+            let byName = matchByName(guess.name, pool: enPool)
+            let known = Set(matches.map(\.id))
+            matches += byName.filter { !known.contains($0.id) }
         }
         ranked = CardTextHeuristics.rank(matches, against: guess)
     }
