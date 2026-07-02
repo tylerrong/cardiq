@@ -25,13 +25,22 @@ actor CardCatalogStore {
 
     // MARK: - Bootstrap
 
-    /// Load the disk cache, then top up from the network if incomplete or stale.
-    /// Call once at launch; safe to call again (no-ops while a download runs).
+    /// Load the disk cache (or the snapshot bundled with the app), then top up
+    /// from the network if incomplete or stale. Call once at launch; safe to
+    /// call again (no-ops while a download runs).
     func bootstrap(client: PokemonTCGClient = PokemonTCGClient()) async {
         loadFromDiskIfNeeded()
         let stale = lastRefreshed.map { Date().timeIntervalSince($0) > 7 * 86_400 } ?? true
         guard !isDownloading, (!isComplete || stale) else { return }
-        await download(client: client, fullRefresh: isComplete && stale)
+        isDownloading = true
+        defer { isDownloading = false }
+        if isComplete {
+            await topUp(client: client)     // cheap delta: only fetch until known cards
+        } else {
+            await download(client: client)  // finish the initial full download
+        }
+        lastRefreshed = Date()
+        saveToDisk()
     }
 
     // MARK: - Search
@@ -67,37 +76,77 @@ actor CardCatalogStore {
 
     // MARK: - Download (paginated, incremental, newest-first)
 
-    private func download(client: PokemonTCGClient, fullRefresh: Bool) async {
-        isDownloading = true
-        defer { isDownloading = false }
-
-        var fetched: [CardIdentity] = fullRefresh ? [] : cards
+    /// Initial download: fetch pages in concurrent batches of 4 for speed,
+    /// saving after every batch so partial progress survives relaunch.
+    private func download(client: PokemonTCGClient) async {
+        var fetched: [CardIdentity] = cards
         var seen = Set(fetched.map(\.id))
-        var page = fullRefresh ? 1 : (fetched.count / Self.pageSize) + 1
-        var consecutiveFailures = 0
+        var nextPage = (fetched.count / Self.pageSize) + 1
+        var failures = 0
 
         while true {
-            do {
-                let (batch, totalCount) = try await client.fetchCatalogPage(page: page, pageSize: Self.pageSize)
-                consecutiveFailures = 0
-                let fresh = batch.filter { seen.insert($0.id).inserted }
-                fetched.append(contentsOf: fresh)
-                apply(fetched, complete: fetched.count >= totalCount || batch.isEmpty)
-                saveToDisk()
-                if isComplete { break }
-                page += 1
-                // Pace requests to stay well under the keyless rate limit.
-                try? await Task.sleep(for: .milliseconds(1500))
-            } catch {
-                consecutiveFailures += 1
-                // Back off on rate limits / flakes; give up after a few misses —
-                // partial progress is saved and resumes next launch.
-                if consecutiveFailures >= 3 { break }
-                try? await Task.sleep(for: .seconds(10))
+            let pages = Array(nextPage..<(nextPage + Self.concurrentPages))
+            var batches: [Int: [CardIdentity]] = [:]
+            var totalCount = Int.max
+            await withTaskGroup(of: (Int, [CardIdentity], Int)?.self) { group in
+                for page in pages {
+                    group.addTask {
+                        guard let (batch, total) = try? await client.fetchCatalogPage(page: page, pageSize: Self.pageSize)
+                        else { return nil }
+                        return (page, batch, total)
+                    }
+                }
+                for await result in group {
+                    if let (page, batch, total) = result {
+                        batches[page] = batch
+                        totalCount = min(totalCount, total)
+                    }
+                }
             }
+
+            if batches.isEmpty {
+                failures += 1
+                // Rate limit / outage: back off, then give up until next launch —
+                // everything fetched so far is already on disk.
+                if failures >= 3 { break }
+                try? await Task.sleep(for: .seconds(15))
+                continue
+            }
+            failures = 0
+
+            var sawShortPage = false
+            for page in pages {
+                guard let batch = batches[page] else { break }  // keep pages contiguous
+                fetched.append(contentsOf: batch.filter { seen.insert($0.id).inserted })
+                nextPage = page + 1
+                if batch.count < Self.pageSize { sawShortPage = true }
+            }
+            apply(fetched, complete: sawShortPage || (totalCount != .max && fetched.count >= totalCount))
+            saveToDisk()
+            if isComplete { break }
+            try? await Task.sleep(for: .milliseconds(400))
         }
-        lastRefreshed = Date()
-        saveToDisk()
+    }
+
+    /// Weekly refresh once the catalog is complete: pages are newest-first, so
+    /// fetch from page 1 and stop at the first page with nothing new.
+    private func topUp(client: PokemonTCGClient) async {
+        var known = Set(cards.map(\.id))
+        var fresh: [CardIdentity] = []
+        var page = 1
+        while page <= 20 {  // safety bound; a week of new sets is 1-2 pages
+            guard let (batch, _) = try? await client.fetchCatalogPage(page: page, pageSize: Self.pageSize)
+            else { break }
+            let new = batch.filter { known.insert($0.id).inserted }
+            fresh.append(contentsOf: new)
+            if new.count < batch.count || batch.count < Self.pageSize { break }
+            page += 1
+            try? await Task.sleep(for: .milliseconds(400))
+        }
+        if !fresh.isEmpty {
+            apply(fresh + cards, complete: true)
+            saveToDisk()
+        }
     }
 
     private func apply(_ newCards: [CardIdentity], complete: Bool) {
@@ -109,6 +158,7 @@ actor CardCatalogStore {
     // MARK: - Disk persistence
 
     private static let pageSize = 250
+    private static let concurrentPages = 4
 
     private struct CacheFile: Codable {
         var cards: [CardIdentity]
@@ -126,12 +176,25 @@ actor CardCatalogStore {
     private func loadFromDiskIfNeeded() {
         guard !loadedFromDisk else { return }
         loadedFromDisk = true
-        guard let url = cacheURL,
-              let data = try? Data(contentsOf: url),
-              let file = try? JSONDecoder().decode(CacheFile.self, from: data)
-        else { return }
-        apply(file.cards, complete: file.isComplete)
-        lastRefreshed = file.lastRefreshed
+
+        // Prefer the on-disk cache (has any post-install refreshes)...
+        if let url = cacheURL,
+           let data = try? Data(contentsOf: url),
+           let file = try? JSONDecoder().decode(CacheFile.self, from: data),
+           !file.cards.isEmpty {
+            apply(file.cards, complete: file.isComplete)
+            lastRefreshed = file.lastRefreshed
+            return
+        }
+
+        // ...otherwise fall back to the snapshot bundled with the app, so the
+        // full catalog is searchable immediately on first launch.
+        if let url = Bundle.main.url(forResource: "card-catalog-seed", withExtension: "json"),
+           let data = try? Data(contentsOf: url),
+           let file = try? JSONDecoder().decode(CacheFile.self, from: data) {
+            apply(file.cards, complete: file.isComplete)
+            lastRefreshed = file.lastRefreshed
+        }
     }
 
     private func saveToDisk() {

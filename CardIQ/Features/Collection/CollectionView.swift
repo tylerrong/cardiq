@@ -10,7 +10,6 @@ struct CollectionView: View {
     @State private var filterOption: CollectionFilterOption = .all
     @State private var showGrid = true
     @State private var selectedItem: CollectionItem?
-    @State private var hasSeedLoaded = false
     @State private var showAddCard = false
     @State private var itemToDelete: CollectionItem?
 
@@ -124,10 +123,6 @@ struct CollectionView: View {
                 Text("Remove this card from your collection? This cannot be undone.")
             }
             .task {
-                if !hasSeedLoaded && items.isEmpty {
-                    await seedCollection()
-                    hasSeedLoaded = true
-                }
                 CIQImageCache.shared.prefetchThumbnails(for: items.compactMap(\.cardIdentity))
                 await refreshPrices()
             }
@@ -233,26 +228,6 @@ struct CollectionView: View {
                 }
             }
         }
-    }
-
-    private func seedCollection() async {
-        for sample in MockSeedData.sampleCollectionItems {
-            let item = CollectionItem(
-                cardIdentity: sample.card,
-                purchasePrice: sample.purchase,
-                purchaseDate: Date().addingTimeInterval(-Double.random(in: 86400...2592000))
-            )
-            item.marketSnapshot =
-                await MarketSnapshotCache.shared.snapshot(for: sample.card.id)
-                ?? MockSeedData.marketSnapshot(for: sample.card.id)
-            if let grade = sample.grade {
-                item.officialGrade = grade
-                item.officialGradingCompany = sample.gradeCompany
-            }
-            item.gradingReport = MockSeedData.gradingReport(for: sample.card.id)
-            modelContext.insert(item)
-        }
-        try? modelContext.save()
     }
 
     /// Refresh stored prices with live data so Current Value / P&L reflect the
