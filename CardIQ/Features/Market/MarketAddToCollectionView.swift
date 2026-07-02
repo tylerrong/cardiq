@@ -76,8 +76,7 @@ struct MarketAddToCollectionView: View {
         if let market {
             item.marketSnapshot = market
         }
-        let report = MockSeedData.gradingReport(for: card.id)
-        item.gradingReport = report
+        // Never scanned — no condition read; grading data stays honest.
 
         CollectionSync.add(item, to: modelContext)
         onSaved()

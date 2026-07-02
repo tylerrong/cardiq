@@ -158,8 +158,9 @@ struct AddCardView: View {
         let market = try? await ServiceContainer.shared.marketData.snapshot(for: card.id)
         item.marketSnapshot = market
 
-        let report = MockSeedData.gradingReport(for: card.id)
-        item.gradingReport = report
+        // No grading report: this card was never scanned. Condition reads
+        // come from the scan flow only — verdict chips and the grading rail
+        // stay honest by simply not appearing for manual adds.
 
         CollectionSync.add(item, to: modelContext)
         dismiss()

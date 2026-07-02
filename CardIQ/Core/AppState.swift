@@ -87,6 +87,13 @@ final class AppState {
         currentUser = .free
         isAuthenticated = false
     }
+
+    /// Sync the displayed tier and scan count with the subscription service —
+    /// the source of truth that purchases and scan consumption go through.
+    func refreshSubscription() async {
+        currentUser.subscriptionTier = await ServiceContainer.shared.subscription.currentTier()
+        currentUser.freeScansRemaining = await ServiceContainer.shared.subscription.remainingScans()
+    }
 }
 
 enum AppTab: Int, CaseIterable, Sendable {
