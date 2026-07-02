@@ -77,18 +77,21 @@ enum ScannerStep: Int, CaseIterable, Sendable {
 
     /// Progress fraction for the bar, scaled to the active mode so front-only
     /// fills smoothly across its shorter flow instead of jumping.
-    func progress(for mode: ScanMode) -> Double {
+    /// Identification + confirmation now happen right after the front capture,
+    /// and `.processing` occurs twice — `identified` distinguishes the quick
+    /// identify pass from the final analysis.
+    func progress(for mode: ScanMode, identified: Bool = false) -> Double {
         switch mode {
         case .frontAndBack:
             switch self {
             case .instructions: 0
-            case .frontCapture: 0.15
-            case .frontReview: 0.30
-            case .backCapture: 0.45
-            case .backReview: 0.60
-            case .optionalSurfaceCapture: 0.70
-            case .processing: 0.80
-            case .identificationConfirmation: 0.90
+            case .frontCapture: 0.10
+            case .frontReview: 0.20
+            case .processing: identified ? 0.85 : 0.28
+            case .identificationConfirmation: 0.35
+            case .backCapture: 0.50
+            case .backReview: 0.62
+            case .optionalSurfaceCapture: 0.72
             case .complete: 1.0
             case .error: 0
             }
@@ -98,8 +101,8 @@ enum ScannerStep: Int, CaseIterable, Sendable {
             case .instructions: 0
             case .frontCapture: 0.2
             case .frontReview: 0.4
-            case .processing: 0.65
-            case .identificationConfirmation: 0.85
+            case .processing: identified ? 0.8 : 0.5
+            case .identificationConfirmation: 0.6
             case .complete: 1.0
             case .backCapture, .backReview, .optionalSurfaceCapture: 0.4
             case .error: 0

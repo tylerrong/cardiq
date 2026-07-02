@@ -4,6 +4,11 @@ struct IdentificationView: View {
     let results: [CardIdentity]
     let selectedCard: CardIdentity?
     let onConfirm: (CardIdentity) -> Void
+    /// Confirm button label — "Confirm & Scan Back" when the back capture
+    /// still follows, so the user knows what's next.
+    var confirmLabel: String = "Confirm This Card"
+    /// Escape hatch when the photo itself was the problem.
+    var onRetake: (() -> Void)?
     @State private var searchText = ""
     @State private var showManualEntry = false
     @State private var showAlternatives = false
@@ -85,12 +90,17 @@ struct IdentificationView: View {
                     .clipShape(RoundedRectangle(cornerRadius: CIQRadius.sm))
                 }
 
-                CIQPrimaryButton("Confirm This Card", icon: "checkmark") {
+                CIQPrimaryButton(confirmLabel, icon: "checkmark") {
                     onConfirm(card)
                 }
 
-                Button("Not this card") {
-                    withAnimation { showAlternatives = true }
+                HStack(spacing: CIQSpacing.lg) {
+                    Button("Not this card") {
+                        withAnimation { showAlternatives = true }
+                    }
+                    if let onRetake {
+                        Button("Retake photo", action: onRetake)
+                    }
                 }
                 .font(CIQFont.subheadline)
                 .foregroundStyle(CIQColors.Fallback.textSecondary)
