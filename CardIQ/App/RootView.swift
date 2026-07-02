@@ -50,7 +50,7 @@ struct MainTabView: View {
                 switch appState.selectedTab {
                 case .home: HomeView()
                 case .collection: CollectionView()
-                case .market: MarketView()
+                case .opportunities: OpportunitiesView()
                 case .profile: ProfileView()
                 }
             }
@@ -84,7 +84,7 @@ struct CIQTabBar: View {
     let onScan: () -> Void
 
     private let leftTabs: [AppTab] = [.home, .collection]
-    private let rightTabs: [AppTab] = [.market, .profile]
+    private let rightTabs: [AppTab] = [.opportunities, .profile]
 
     var body: some View {
         HStack(spacing: 0) {
@@ -117,6 +117,8 @@ struct CIQTabBar: View {
                     .font(.system(size: 19, weight: isSelected ? .semibold : .regular))
                 Text(tab.title)
                     .font(.system(size: 10, weight: .medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
             .foregroundStyle(isSelected ? CIQColors.Fallback.accentPrimary : CIQColors.Fallback.textTertiary)
             .frame(maxWidth: .infinity, minHeight: 44)
